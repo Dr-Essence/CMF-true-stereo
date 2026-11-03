@@ -83,8 +83,8 @@ EXISTING=0
 # Before v0.9.2 the shipped gain was 31, which on this codec is -40 dB (its
 # mute value), not the top. Anything outside the codec's 0-18 range is that
 # mistake, so it is corrected rather than kept.
-if [ "$EXISTING" -gt 0 ] && grep -qE '^ctl\|Handset Volume\|(19|2[0-9]|3[0-9]|[4-9][0-9])[[:space:]]*$' "$DATADIR/actions.conf"; then
-  sed -i -E 's/^ctl\|Handset Volume\|[0-9]+[[:space:]]*$/ctl|Handset Volume|0/' "$DATADIR/actions.conf"
+if [ "$EXISTING" -gt 0 ] && grep -qE '^ctl[|]Handset Volume[|](19|2[0-9]|3[0-9]|[4-9][0-9])[[:space:]]*$' "$DATADIR/actions.conf"; then
+  sed -i -E 's/^ctl[|]Handset Volume[|][0-9]+[[:space:]]*$/ctl|Handset Volume|0/' "$DATADIR/actions.conf"
   rm -f "$DATADIR"/state/ctl_Handset_Volume*
   ui_print "  earpiece gain corrected: 31 was -40 dB (mute), now 0 = +8 dB"
 fi
