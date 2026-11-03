@@ -22,7 +22,7 @@ Verified on **A015 / Tetris, MT6878, Nothing OS B4.1, Android 16.**
 ## What it does
 
 - Plays media through the earpiece alongside the speaker, automatically
-- Earpiece gain at 31 — the hardware's real ceiling, not the 18 the control advertises
+- Earpiece at the receiver amp's maximum, +8 dB (`Handset Volume 0`), the same value the HAL uses
 - Applies only while audio is playing, so the receiver is not held energised
 - Steps aside for headphones and Bluetooth
 - Restores every control it touches on stop, disarm or uninstall
@@ -285,28 +285,36 @@ no `dumpsys`.
 
 ### Earpiece gain, and how loud it can get
 
-The earpiece is already as loud as this signal path allows.
+`Handset Volume` is the receiver amp's gain on the MT6369 codec. Read from the
+codec driver (`snd-soc-mt6369.ko`): the control's range is 0–18, and the
+register runs the opposite way to the dB scale ALSA advertises for it:
 
-Loudness is set by **`ADDA_DL_GAIN`**, the digital gain on the internal codec
-downlink — measured inaudible at `2000`, normal at `65535` — and the HAL
-already parks it at about **63311 of 65535** during playback, roughly 0.3 dB
-from maximum. There is no reserve to unlock.
+| value | gain |
+|---|---|
+| 0 | **+8 dB** (loudest) |
+| 8 | 0 dB |
+| 18 | −10 dB |
+| 31 | −40 dB (the codec's mute value) |
 
-It is deliberately **not** in the shipped config: `ADDA_DL` is shared with the
-headphone path, so pinning it would raise headphone output as a side effect
-in exchange for a fraction of a dB.
+Evidence: every output reads 31 at rest; the driver's put handler treats 31
+as a special case; and the HAL itself sets 0 whenever it drives the receiver.
 
-`Handset Volume` — the value in `actions.conf` — is the receiver's own gain,
-range 0–31 (5-bit field; 40 wraps to 8, measured). Lowering it works, so it is
-useful if you want the earpiece quieter than the speaker, but near the top it
-barely matters: 5 and 31 sound much alike.
+**Versions before v0.9.2 shipped 31**, believing it was the top. That made
+the daemon pull the earpiece down to −40 dB every cycle while the HAL kept
+putting it back to +8 dB — the `Handset Volume: 0 -> 31` lines repeating in
+the log, and an earpiece that sounded weak and uneven. The installer now
+corrects any value above 18 to 0. The two earlier explanations in this README
+(that 31 was the ceiling, then that the control barely mattered) were both
+wrong; recorded rather than quietly edited, because the mistake is the useful
+part.
 
-> An earlier revision of this README claimed 31 was the loudness ceiling and
-> that values above 18 behaved non-monotonically. Both were wrong. The large
-> improvement credited to `Handset Volume 31` was `ADDA_DL_GAIN` recovering
-> after being mistakenly lowered, and the apparent disorder was small
-> variation across a nearly flat response. Recorded rather than quietly
-> edited, because the mistake is the useful part.
+`ADDA_DL_GAIN`, the digital gain before the DAC, is left alone: the HAL parks
+it at 63311 of 65535 (−0.3 dB), and `ADDA_DL` is shared with the headphone
+path.
+
+The earpiece is a receiver: it will not match the speaker, and it has no
+protection circuit. In stereo, balance the two by turning the **speaker** down
+(`STEREO_ATTEN_DB`), not by pushing the earpiece.
 
 ## Why it ships empty elsewhere
 
