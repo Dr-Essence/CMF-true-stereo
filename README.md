@@ -5,9 +5,11 @@ out of its **earpiece as well as its bottom speaker**.
 
 "Fake stereo" is the honest name. It is two drivers playing the same content —
 louder, fuller and taller than the single bottom-firing speaker — not two
-independent channels. True left/right separation is **not possible** on this
-hardware, and the [Findings](#findings-what-this-device-actually-does) section
-shows the measurements that prove it rather than asking you to take my word.
+independent channels. True left/right separation is **not reachable** on this
+phone: the speaker amp and the routing can both carry a separate channel, but
+MediaTek's audio DSP firmware mixes the speaker to mono, and that firmware
+cannot be changed. The [Findings](#findings-what-this-device-actually-does)
+section shows the measurements rather than asking you to take my word.
 
 Verified on **A015 / Tetris, MT6878, Nothing OS B4.1, Android 16.**
 
@@ -22,7 +24,7 @@ Verified on **A015 / Tetris, MT6878, Nothing OS B4.1, Android 16.**
 
 ## What it does not do
 
-- **No left/right stereo.** Both transducers are wired to the same mixer channel.
+- **No left/right stereo.** The audio DSP firmware mixes the speaker to mono (see Findings).
 - **No extra volume from the main speaker.** It is untouched.
 - **Nothing on other devices out of the box.** It installs inert elsewhere and
   ships a probe to work out that device's routing.
@@ -106,26 +108,34 @@ channel to press into service — the internal codec was the only way in.
 
 ### No left/right split, and why
 
-Both transducers are hard-wired to channel 1 of the DL mixer:
+An earlier revision of this section said both transducers were hard-wired to
+channel 1 and that a custom kernel would be needed for stereo. Both claims
+were wrong. Here is what was actually measured, stage by stage, from the
+app to the speaker:
 
-- **Speaker**: `I2SOUT4_CH1 <- DL_24CH_CH1` only. Cutting CH1 silences it;
-  cutting CH2 changes nothing. `I2SOUT4_CH1` offers no `DL_24CH_CH2` source,
-  so the speaker cannot be moved to the right channel.
-- **Earpiece**: `RCV <- ADDA_DL_CH1 <- DL_24CH_CH1` only. Feeding
-  `ADDA_DL_CH2` instead leaves the receiver path unpowered — visible as
-  `Handset Volume` refusing to hold a non-zero value, because the register
-  will not latch while DAPM has the path down.
+| Stage | Can it carry separate L/R? | Evidence |
+|---|---|---|
+| Android framework | Yes | `dumpsys media.audio_flinger`: speaker output is 2-channel FL/FR, *Master mono* off. The policy's speaker port is already stereo, so `stereoctl xml-patch` finds nothing to change. |
+| Dirac (Nothing's speaker tuning) | Inserted on the output mix | Session-0 insert effect; its presets are 2-in/2-out. Removing it alone did not give stereo. |
+| MediaTek audio HAL (`audio.primary.mt6878.so`) | **Mixes to mono** | `AudioALSAPlaybackHandlerBase::doStereoToMonoConversionIfNeed` writes (L+R)/2 to both channels whenever `MTK_AUDIO_NUMBER_OF_SPEAKER` is 1. |
+| Audio DSP (Aurisys `smartpa_awinic`, offload decode) | **Mixes to mono** | With the HAL mix patched out *and* the DSP task flagged as a stereo speaker (`hw_info` bit `0x4`), a left-only signal still reached channel 2. Offload playback (most music apps) is decoded on the DSP and never passes through the HAL code at all. |
+| AFE routing | Yes | `I2SOUT4_CH2 <- DL_24CH_CH2` is live during playback. |
+| Awinic amp (`aw882xx`) | Yes | I2S channel select is register `0x06`, bits 11:10 (`01` left, `10` right), writable through `/sys/bus/i2c/devices/6-0034/reg`. Stock is left (`0x34e8`). Set to right (`0x38e8`), cutting `I2SOUT4_CH2` silences the speaker, so the amp really follows the register. |
+| Earpiece | Channel 1 | `RCV <- ADDA_DL_CH1 <- DL_24CH_CH1`; `ADDA_DL_CH1` has no CH2 source. |
 
-So this module gives you both drivers playing the same content: more output
-and a fuller, taller image than the single bottom speaker, but not two
-independent channels. True stereo is not reachable from userspace here.
+So every stage this module can reach supports stereo except the last one
+before the amp: the DSP firmware. Setting `MTK_AUDIO_NUMBER_OF_SPEAKER` to 2
+was rejected because it also switches the HAL to a `dual_speaker_output` path
+that does not exist in `audio_device.xml` and puts the Awinic speaker
+protection into two-amp mode with one amp fitted. A kernel cannot help either:
+the routing, the amp driver and the HAL are vendor code, and the DSP firmware
+is sealed.
 
-**Do not run `stereoctl xml-patch` on this device.** The mono speaker port is
-what makes the framework sum L+R before `DL_24CH`, so CH1 carries the whole
-mix. Widening it to stereo would put only the left channel on CH1 — and since
-both outputs read CH1, the right channel would be lost entirely. The
-`xml-patch` machinery stays in the module for other hardware, where the
-speaker and earpiece can be fed from different channels.
+This module therefore plays the same full mix through both drivers: more
+output and a fuller, taller image than the bottom speaker alone.
+
+**`stereoctl xml-patch` is a no-op here** — the policy already declares a
+stereo speaker port. The machinery stays in the module for other hardware.
 
 MediaTek's "2nd loudspeaker" machinery **is** present on this build, in
 `/vendor/etc/audio_param/`:
