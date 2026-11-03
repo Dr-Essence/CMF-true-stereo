@@ -529,7 +529,8 @@ Layout:
 
 ## Credits and licence
 
-The module scripts are free to use, modify and redistribute — attribution
+The module is © 2026 Dr.Essence under the [0BSD licence](LICENSE): use,
+copy, change and share it for any purpose, no conditions. Attribution is
 welcome, not required.
 
 `bin/tinymix` is a statically linked `aarch64` build of
