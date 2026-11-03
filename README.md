@@ -1,13 +1,17 @@
-# cmf-fake-stereo
+# CMF-true-stereo
 
 A Magisk / KernelSU / APatch module that makes the **CMF Phone 1** play media
-out of its **earpiece as well as its bottom speaker**.
+out of its **earpiece as well as its bottom speaker** — in true stereo if you
+want it.
+
+Download the zip from [Releases](https://github.com/Dr-Essence/CMF-true-stereo/releases).
+The companion app is [CMF-true-stereo-manager](https://github.com/Dr-Essence/CMF-true-stereo-manager).
 
 It has two channel modes:
 
 - **mono** (default, stock audio): both drivers play the same full mix —
-  louder, fuller and taller than the single bottom-firing speaker. This is
-  where the "fake stereo" name comes from.
+  louder, fuller and taller than the single bottom-firing speaker. This was
+  the whole module once, back when it was called cmf-fake-stereo.
 - **stereo**: real left/right. The **earpiece plays the left channel and the
   speaker the right**. It costs Awinic's speaker-protection processing on
   media, so the speaker amp is held at a fixed attenuation instead. See
