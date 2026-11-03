@@ -354,11 +354,71 @@ module_active() {
   [ "${ENABLED:-1}" = 1 ]
 }
 
-daemon_pid() {
-  [ -f "$PIDFILE" ] || return 1
-  _p=$(cat "$PIDFILE" 2>/dev/null)
-  [ -n "$_p" ] && [ -d "/proc/$_p" ] && { echo "$_p"; return 0; }
+# The daemon is found by its command line, not only through the pid file.
+# On the CMF Phone 1 service.sh was measured starting three daemons in the
+# same second at every boot; the pid file named one of them, so status read
+# "not running" while three were fighting over the mixer, and restart added
+# a fourth.
+#
+# Match the script argument itself (argv[1] of "sh .../stereo-daemon.sh"), not
+# the name anywhere in the command line: a shell running a command that merely
+# mentions stereo-daemon.sh must never be taken for the daemon and killed.
+_is_daemon() {
+  case $(tr '\0' '\n' 2>/dev/null < "/proc/$1/cmdline" | sed -n 2p) in
+    */scripts/stereo-daemon.sh) return 0 ;;
+  esac
   return 1
+}
+
+daemon_pids() {
+  for _d in /proc/[0-9]*; do
+    _p=${_d#/proc/}
+    [ "$_p" = "$$" ] && continue
+    _is_daemon "$_p" && echo "$_p"
+  done
+}
+
+daemon_pid() {
+  _p=$(cat "$PIDFILE" 2>/dev/null)
+  [ -n "$_p" ] && _is_daemon "$_p" && { echo "$_p"; return 0; }
+  _p=$(daemon_pids | head -n 1)
+  [ -n "$_p" ] && { echo "$_p"; return 0; }
+  return 1
+}
+
+# One daemon only. mkdir is atomic, so of several started at once exactly one
+# gets the lock. A lock left by a dead daemon (or a previous boot) is taken
+# over; an empty pid means a daemon is mid-start, so leave it alone.
+LOCKDIR=$DATADIR/daemon.lock
+daemon_lock() {
+  if ! mkdir "$LOCKDIR" 2>/dev/null; then
+    _o=$(cat "$LOCKDIR/pid" 2>/dev/null)
+    [ -z "$_o" ] && return 1
+    _is_daemon "$_o" && return 1
+    rm -rf "$LOCKDIR"
+    mkdir "$LOCKDIR" 2>/dev/null || return 1
+  fi
+  echo $$ > "$LOCKDIR/pid"
+  echo $$ > "$PIDFILE"
+}
+
+# Release only what is ours: a stopping daemon must not delete the pid file
+# or lock of the one that replaced it.
+daemon_unlock() {
+  [ "$(cat "$PIDFILE" 2>/dev/null)" = "$$" ] && rm -f "$PIDFILE"
+  [ "$(cat "$LOCKDIR/pid" 2>/dev/null)" = "$$" ] && rm -rf "$LOCKDIR"
+}
+
+# Stop every daemon, however many there are, and wait for them to go.
+stop_daemons() {
+  _ps=$(daemon_pids)
+  [ -n "$_ps" ] || { rm -rf "$LOCKDIR" "$PIDFILE"; return 1; }
+  # shellcheck disable=SC2086
+  kill $_ps 2>/dev/null
+  _w=0
+  while [ -n "$(daemon_pids)" ] && [ $_w -lt 10 ]; do sleep 1; _w=$((_w + 1)); done
+  rm -rf "$LOCKDIR" "$PIDFILE"
+  return 0
 }
 
 ##############################################################################

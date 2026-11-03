@@ -383,6 +383,41 @@ STEREO_ATTEN_DB=6;  check "6 dB = 48 steps" "$(amp_atten_steps)" "48"
 STEREO_ATTEN_DB=99; check "capped at 30 dB" "$(amp_atten_steps)" "240"
 STEREO_ATTEN_DB=x;  check "junk -> 6 dB"    "$(amp_atten_steps)" "48"
 
+echo "single daemon"
+# Three started in the same instant, as service.sh was measured doing on the
+# CMF Phone 1: exactly one may hold the lock.
+mkdir -p "$TMP/fake/scripts"
+cat > "$TMP/fake/scripts/stereo-daemon.sh" <<FAKE
+#!/bin/sh
+MODDIR=$ROOT DATADIR=$DATADIR
+. $ROOT/scripts/common.sh
+trap 'daemon_unlock; exit 0' TERM
+if daemon_lock; then echo got >> $TMP/locks; while :; do sleep 1; done; fi
+echo lost >> $TMP/locks
+FAKE
+: > "$TMP/locks"
+for _i in 1 2 3; do sh "$TMP/fake/scripts/stereo-daemon.sh" & done
+sleep 2
+check "one of three gets the lock" "$(grep -c got "$TMP/locks")" "1"
+check "the other two step aside" "$(grep -c lost "$TMP/locks")" "2"
+check "found by command line" "$(daemon_pids | wc -l | tr -d ' ')" "1"
+check "pid file names it" "$(daemon_pid)" "$(cat "$PIDFILE")"
+# A shell whose command merely mentions the daemon is not the daemon.
+sh -c "sleep 3 # scripts/stereo-daemon.sh" &
+_decoy=$!
+check "a mention is not a daemon" "$(_is_daemon $_decoy && echo yes || echo no)" "no"
+stop_daemons
+check "stop_daemons stops it" "$(daemon_pids | wc -l | tr -d ' ')" "0"
+check "lock released" "$([ -d "$LOCKDIR" ] && echo yes || echo no)" "no"
+check "decoy left alone" "$(kill -0 $_decoy 2>/dev/null && echo alive || echo gone)" "alive"
+# A lock naming a dead pid (a crash, or the previous boot) is taken over.
+mkdir -p "$LOCKDIR"; echo 999999 > "$LOCKDIR/pid"; : > "$TMP/locks"
+sh "$TMP/fake/scripts/stereo-daemon.sh" &
+sleep 1
+check "stale lock taken over" "$(grep -c got "$TMP/locks")" "1"
+stop_daemons
+wait 2>/dev/null
+
 echo
 echo "passed $PASS, failed $FAIL"
 [ "$FAIL" -eq 0 ]

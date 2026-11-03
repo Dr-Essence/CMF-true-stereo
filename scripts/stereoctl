@@ -198,7 +198,9 @@ cmd_doctor() {
   fi
 
   echo "2. daemon"
-  if _p=$(daemon_pid); then echo "   running (pid $_p)"
+  _n=$(daemon_pids | wc -l | tr -d ' ')
+  if [ "$_n" -gt 1 ]; then echo "   $_n RUNNING - they fight over the mixer. Fix: stereoctl restart"; _bad=1
+  elif _p=$(daemon_pid); then echo "   running (pid $_p)"
   else echo "   NOT running. Fix: stereoctl restart"; _bad=1; fi
 
   echo "3. tinymix"
@@ -273,9 +275,9 @@ cmd_doctor() {
 # Wipe remembered state. Saved originals are the one thing that survives a
 # reinstall, and a bad one makes every revert restore a broken value.
 cmd_reset() {
-  if _p=$(daemon_pid); then kill "$_p" 2>/dev/null; sleep 1; fi
+  stop_daemons
   rm -f "$STATEDIR"/* "$DATADIR/guard_bypass" "$DATADIR/solo_prev" \
-        "$KILLSWITCH" "$PIDFILE" 2>/dev/null
+        "$KILLSWITCH" 2>/dev/null
   echo "cleared: saved originals, guard bypass, solo state, kill switch"
   cmd_restart
 }
@@ -312,13 +314,7 @@ cmd_unsolo() {
 
 cmd_off() {
   touch "$KILLSWITCH"
-  if _p=$(daemon_pid); then
-    kill "$_p" 2>/dev/null
-    _w=0
-    while daemon_pid >/dev/null 2>&1 && [ $_w -lt 10 ]; do sleep 1; _w=$((_w + 1)); done
-    rm -f "$PIDFILE"
-    echo "daemon stopped"
-  fi
+  stop_daemons && echo "daemon stopped"
   revert_actions
   if stereo_active; then
     amp_set_chsel mono
@@ -367,7 +363,7 @@ cmd_channels() {
 }
 
 cmd_restart() {
-  if _p=$(daemon_pid); then kill "$_p" 2>/dev/null; sleep 1; fi
+  stop_daemons
   STARTUP_DELAY=0 nohup "$MODDIR/scripts/stereo-daemon.sh" >/dev/null 2>&1 &
   sleep 2
   if _p=$(daemon_pid); then echo "daemon restarted (pid $_p)"; else echo "daemon did not start - check: stereoctl log"; fi

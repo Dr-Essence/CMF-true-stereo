@@ -9,8 +9,11 @@
 MODDIR=${MODDIR:-/data/adb/modules/cmf_stereo}
 . "$MODDIR/scripts/common.sh"
 
+if ! daemon_lock; then
+  log info "another daemon is already running (pid $(cat "$LOCKDIR/pid" 2>/dev/null)) - exiting"
+  exit 0
+fi
 rotate_log
-echo $$ > "$PIDFILE"
 # In stereo the amp is left on the full mix when the earpiece stops, so the
 # speaker never plays one channel alone. The driver puts its own (left) slot
 # back on the next stream start; README covers running stereo with the
@@ -19,7 +22,7 @@ on_stop() {
   log info "daemon stopping"
   revert_actions
   stereo_active && amp_set_chsel mono
-  rm -f "$PIDFILE"
+  daemon_unlock
   exit 0
 }
 trap on_stop TERM INT
@@ -34,7 +37,7 @@ sleep "${STARTUP_DELAY:-10}"
 
 if [ "$(action_count)" -eq 0 ]; then
   log info "no actions configured - nothing to do (run 'stereoctl probe' first)"
-  rm -f "$PIDFILE"
+  daemon_unlock
   exit 0
 fi
 
