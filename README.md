@@ -1,11 +1,41 @@
+<p align="center"><img src="docs/banner.png" alt="CMF true stereo - earpiece left, speaker right" width="100%"></p>
+
 # CMF-true-stereo
+
+**Real left/right stereo on the CMF Phone 1.** The earpiece becomes the left
+speaker, the bottom speaker the right — no custom kernel, just root.
+
+<p align="center">
+  <a href="https://github.com/Dr-Essence/CMF-true-stereo/releases/latest"><b>Download the module</b></a> ·
+  <a href="https://github.com/Dr-Essence/CMF-true-stereo-manager/releases/latest"><b>Get the app</b></a> ·
+  <a href="#mono-and-stereo">How stereo works</a>
+</p>
+
+|  | |
+|---|---|
+| 🔊 **Stereo** | Earpiece = left, speaker = right. Games, films and music finally have sides. |
+| 📢 **Mono** | Default. Both speakers play the full mix: louder and fuller than the bottom speaker alone. |
+| 📱 **App** | *CMF Stereo*, a clean Nothing-style app: on/off, Mono/Stereo, two 1–10 levels. |
+| 🛟 **Safe** | Patches nothing it has not verified, never touches the vendor partition, and undoes itself after two failed boots. |
+
+### Install in three steps
+
+1. Flash the zip in **Magisk / KernelSU / APatch** and reboot.
+2. Open **CMF Stereo** and pick **Stereo** — or in a terminal: `su -c stereoctl channels stereo`.
+3. Reboot. Hold the phone with the earpiece on your **left**.
+
+Works on the **CMF Phone 1 (A015)**. On any other phone it installs and does
+nothing. Stereo turns off Awinic's speaker protection for media and holds the
+speaker a little quieter instead — use Mono for loud listening. Details in
+[Mono and stereo](#mono-and-stereo).
+
+---
+
+## About
 
 A Magisk / KernelSU / APatch module that makes the **CMF Phone 1** play media
 out of its **earpiece as well as its bottom speaker** — in true stereo if you
 want it.
-
-Download the zip from [Releases](https://github.com/Dr-Essence/CMF-true-stereo/releases).
-The companion app is [CMF-true-stereo-manager](https://github.com/Dr-Essence/CMF-true-stereo-manager).
 
 It has two channel modes:
 
