@@ -1,8 +1,10 @@
 name: Release
 
-# Push a tag like v0.9.2 and this runs the off-device tests, builds the
-# flashable zip and publishes it as a GitHub release. The tag must match
-# module.prop's version, so a release can never carry the wrong one.
+# Runs the off-device tests, builds the flashable zip and publishes it as a
+# GitHub release tagged with module.prop's version - either by pushing that
+# tag, or by running this workflow by hand (it then creates the tag on the
+# commit it built). A pushed tag must match module.prop, so a release can
+# never carry the wrong version.
 on:
   push:
     tags: ['v*']
@@ -31,6 +33,7 @@ jobs:
           VER=$(grep '^version=' module.prop | cut -d= -f2-)
           ./build.sh "CMF-true-stereo-$VER.zip"
           echo "ZIP=CMF-true-stereo-$VER.zip" >> "$GITHUB_ENV"
+          echo "VER=$VER" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -38,10 +41,11 @@ jobs:
           path: ${{ env.ZIP }}
 
       - name: Publish
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          name: CMF-true-stereo ${{ github.ref_name }}
+          tag_name: ${{ env.VER }}
+          target_commitish: ${{ github.sha }}
+          name: CMF-true-stereo ${{ env.VER }}
           body: |
             Flash in Magisk / KernelSU / APatch, reboot. CMF Phone 1 (A015) only;
             on other phones it installs inert.
