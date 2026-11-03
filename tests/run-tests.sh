@@ -329,6 +329,60 @@ patch_one "$TMP/nospk.xml" "$TMP/nospk-out.xml" 2>/dev/null
 check "no speaker port -> refused" "$?" "3"
 check "no output file left behind" "$([ -f "$TMP/nospk-out.xml" ] && echo yes || echo no)" "no"
 
+echo "speaker channels"
+# The aurisys rewrite: one library, in one scenario, plus the marker.
+cat > "$TMP/aur.xml" <<'XML'
+<?xml version="1.0" encoding="UTF-8" ?>
+<aurisys_config>
+    <aurisys_scenarios>
+        <aurisys_scenario aurisys_scenario="AURISYS_SCENARIO_DSP_PLAYBACK_SMARTPA">
+            <downlink_library_name_list digital_gain_lib_name="">
+                <library name="smartpa_awinic"/>
+            </downlink_library_name_list>
+        </aurisys_scenario>
+        <aurisys_scenario aurisys_scenario="AURISYS_SCENARIO_DSP_CALL_FINAL">
+            <downlink_library_name_list digital_gain_lib_name="">
+                <library name="smartpa_awinic"/>
+            </downlink_library_name_list>
+        </aurisys_scenario>
+    </aurisys_scenarios>
+</aurisys_config>
+XML
+_patch_aurisys "$TMP/aur.xml" "$TMP/aur-out.xml"
+check "playback scenario -> aurisys_demo" \
+  "$(sed -n '/aurisys_scenario="AURISYS_SCENARIO_DSP_PLAYBACK_SMARTPA"/,/<\/aurisys_scenario>/p' "$TMP/aur-out.xml" | grep -c '<library name="aurisys_demo"/>')" "1"
+check "call scenario keeps smartpa_awinic" \
+  "$(sed -n '/DSP_CALL_FINAL/,/<\/aurisys_scenario>/p' "$TMP/aur-out.xml" | grep -c 'smartpa_awinic')" "1"
+check "marker added once" "$(grep -c "$AUR_MARK" "$TMP/aur-out.xml")" "1"
+check "nothing else changed" "$(($(wc -l < "$TMP/aur-out.xml") - $(wc -l < "$TMP/aur.xml")))" "1"
+AUR=$TMP/aur-out.xml
+check "stereo detected from the marker" "$(stereo_active && echo yes || echo no)" "yes"
+AUR=$TMP/aur.xml
+check "stock reads as mono" "$(stereo_active && echo yes || echo no)" "no"
+
+# Amp slot: read-modify-write of bits 11:10 only, through a fake 'reg' node
+# that behaves like the driver's (show: all registers, store: "reg val").
+mkdir -p "$TMP/amp"
+: > "$TMP/amp/dbg_prof"
+AMP_DIR=$TMP/amp
+printf 'reg:0x05=0x0000\nreg:0x06=0x34e8\nreg:0x07=0x0040\n' > "$TMP/amp/reg"
+check "stock slot reads left" "$(amp_chsel)" "left"
+# The real node takes "0x06 0x38e8"; the fake file just records the write.
+amp_set_chsel right
+check "right writes bits 11:10 = 10" "$(cat "$TMP/amp/reg")" "0x06 0x38e8"
+printf 'reg:0x06=0x38e8\n' > "$TMP/amp/reg"
+check "right reads back" "$(amp_chsel)" "right"
+amp_set_chsel mono
+check "mono writes bits 11:10 = 11" "$(cat "$TMP/amp/reg")" "0x06 0x3ce8"
+printf 'reg:0x06=0x3ce8\n' > "$TMP/amp/reg"
+amp_set_chsel mono
+check "no write when already there" "$(cat "$TMP/amp/reg")" "reg:0x06=0x3ce8"
+check "bad slot refused" "$(amp_set_chsel sideways; echo $?)" "1"
+
+STEREO_ATTEN_DB=6;  check "6 dB = 48 steps" "$(amp_atten_steps)" "48"
+STEREO_ATTEN_DB=99; check "capped at 30 dB" "$(amp_atten_steps)" "240"
+STEREO_ATTEN_DB=x;  check "junk -> 6 dB"    "$(amp_atten_steps)" "48"
+
 echo
 echo "passed $PASS, failed $FAIL"
 [ "$FAIL" -eq 0 ]

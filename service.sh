@@ -18,6 +18,11 @@ if [ -f "$DATADIR/xml_overlay_auto_removed" ]; then
   rm -f "$DATADIR/xml_overlay_auto_removed"
 fi
 
+if [ -f "$DATADIR/stereo_auto_removed" ]; then
+  log warn "the stereo overlay was auto-removed after failed boots; channels are back to mono"
+  rm -f "$DATADIR/stereo_auto_removed"
+fi
+
 chmod 0755 "$MODDIR/scripts/"*.sh "$MODDIR/scripts/stereoctl" 2>/dev/null
 
 nohup "$MODDIR/scripts/stereo-daemon.sh" >/dev/null 2>&1 &

@@ -25,6 +25,8 @@ GUARD_CTL=
 GUARD_VALUE=
 PLAYBACK_CTL=
 PLAYBACK_VALUE=1
+CHANNELS=mono
+STEREO_ATTEN_DB=6
 
 mkdir -p "$DATADIR" "$STATEDIR" 2>/dev/null
 
@@ -450,3 +452,6 @@ diff_snapshots() {
     END { if (n == 0) print "  (no control changed)" }
   ' "$1" "$2"
 }
+
+# Mono / stereo speaker channels and the speaker amp helpers.
+. "$MODDIR/scripts/channels.sh"

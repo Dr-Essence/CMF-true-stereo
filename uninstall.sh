@@ -6,6 +6,8 @@ if [ -f "$MODDIR/scripts/common.sh" ]; then
   . "$MODDIR/scripts/common.sh"
   if _p=$(daemon_pid); then kill "$_p" 2>/dev/null; sleep 1; fi
   revert_actions
+  # The stereo overlay leaves with the module; give the amp its gain back.
+  amp_release_atten
 fi
 
 # Keep the config and probe reports: reinstalling should not lose the routing

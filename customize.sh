@@ -43,7 +43,7 @@ if [ -f "$DATADIR/stereo.conf" ]; then
   ADDED=0
   for KEY in ENABLED MODE WATCH_INTERVAL STARTUP_DELAY REQUIRE_SPEAKER_ROUTE \
              GUARD_CTL GUARD_VALUE PLAYBACK_CTL PLAYBACK_VALUE \
-             MIXER_CARD LOG_LEVEL LOG_MAX_KB; do
+             MIXER_CARD CHANNELS STEREO_ATTEN_DB LOG_LEVEL LOG_MAX_KB; do
     grep -q "^[[:space:]]*$KEY=" "$DATADIR/stereo.conf" && continue
     DEF=$(grep "^$KEY=" "$MODPATH/config/stereo.conf" | head -n 1)
     [ -n "$DEF" ] || continue
@@ -91,10 +91,39 @@ else
 fi
 echo 0 > "$DATADIR/boot_pending"
 
+
 set_perm_recursive "$MODPATH" 0 0 0755 0644
 set_perm_recursive "$MODPATH/scripts" 0 0 0755 0755
 set_perm "$MODPATH/system/bin/stereoctl" 0 0 0755
 chmod 0700 "$DATADIR" 2>/dev/null
+
+##############################################################################
+# speaker channels
+#
+# The stereo overlay lives inside the module directory, which an update
+# replaces - so a phone that was in stereo is staged again here. Staging
+# patches this phone's own vendor files after checking their hashes; on any
+# mismatch it refuses and the phone stays on stock mono. This runs after the
+# set_perm calls above, which would otherwise relabel the staged vendor files.
+##############################################################################
+if [ -d /data/adb/modules/cmf_stereo_halpatch_test ]; then
+  touch /data/adb/modules/cmf_stereo_halpatch_test/remove
+  ui_print "  the pre-release stereo test module will be removed at reboot"
+fi
+if grep -q "^CHANNELS=stereo" "$DATADIR/stereo.conf" 2>/dev/null; then
+  if [ "$IS_CMF1" = 1 ] && WHY=$(MODDIR=$MODPATH DATADIR=$DATADIR sh -c '
+        log() { :; }
+        . "$MODDIR/scripts/channels.sh"
+        stage_stereo'); then
+    ui_print "  channels : stereo (earpiece left, speaker right)"
+  else
+    sed -i 's/^CHANNELS=.*/CHANNELS=mono/' "$DATADIR/stereo.conf"
+    ui_print "  channels : mono - stereo could not be staged:"
+    ui_print "             $WHY"
+  fi
+else
+  ui_print "  channels : mono (stock). 'stereoctl channels stereo' for L/R"
+fi
 
 ##############################################################################
 # report what the device can and cannot do

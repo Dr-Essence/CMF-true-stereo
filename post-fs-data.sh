@@ -1,7 +1,8 @@
 #!/system/bin/sh
 # Runs before module files are mounted. This is the boot watchdog: if the
 # previous two boots never reached sys.boot_completed while our audio policy
-# overlay was active, the overlay is removed before it can be mounted again.
+# or stereo overlay was active, that overlay is removed before it can be
+# mounted again.
 #
 # That turns a bad policy into "reboot once more and it is gone" instead of a
 # trip to recovery - which is exactly how the Hi-Res Audio module bricks boots.
@@ -20,8 +21,18 @@ if [ -n "$OVERLAY_XML" ] && [ "$(boot_strikes)" -ge 2 ]; then
   boot_strike_clear
 fi
 
+# Same for the stereo overlay (patched audio HAL + DSP config): two failed
+# boots with it in place and it goes, leaving the phone on stock mono audio.
+if stereo_staged && [ "$(boot_strikes)" -ge 2 ]; then
+  log warn "boot watchdog: $(boot_strikes) failed boots with the stereo overlay - back to mono"
+  unstage_stereo
+  sed -i 's/^CHANNELS=.*/CHANNELS=mono/' "$CONF" 2>/dev/null
+  touch "$DATADIR/stereo_auto_removed"
+  boot_strike_clear
+fi
+
 # Anything active this boot counts as a strike until service.sh clears it.
-if [ -n "$OVERLAY_XML" ] || [ "$(action_count)" -gt 0 ]; then
+if [ -n "$OVERLAY_XML" ] || stereo_staged || [ "$(action_count)" -gt 0 ]; then
   boot_strike_add
 fi
 

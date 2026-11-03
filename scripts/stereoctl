@@ -31,6 +31,14 @@ stereoctl - CMF Phone 1 stereo speaker control
                       (start or stop playback during the wait - this is how
                       you find which controls actually carry media)
 
+  channels [mono|stereo]
+                      show or choose the speaker channels (reboot to apply)
+                      mono   = stock: both drivers play the full mix, with
+                               Awinic speaker protection
+                      stereo = earpiece left, speaker right. Awinic's DSP
+                               protection is replaced by a fixed amp
+                               attenuation (STEREO_ATTEN_DB, default 6 dB)
+
   xml-patch           overlay a Speaker-port-stereo audio policy (reboot)
   xml-revert          remove that overlay (reboot)
 
@@ -57,6 +65,16 @@ cmd_status() {
   fi
   if playback_active; then echo "playback:  active"; else echo "playback:  idle"; fi
   echo "boot:      $(boot_strikes) strike(s) since last successful boot"
+  _act=mono; stereo_active && _act=stereo
+  _stg=mono; stereo_staged && _stg=stereo
+  if [ "$_act" = "$_stg" ]; then
+    echo "channels:  $_act"
+  else
+    echo "channels:  $_act (switches to $_stg after reboot)"
+  fi
+  if [ "$_act" = stereo ]; then
+    echo "amp slot:  $(amp_chsel)   attenuation: $(ctl_get "$AMP_VOL_CTL" 2>/dev/null)/8 dB (holds ${STEREO_ATTEN_DB:-6} dB)"
+  fi
   _ov=$(find "$MODDIR/system" -name 'audio_policy_configuration*.xml' 2>/dev/null | wc -l)
   echo "xml overlay: $_ov file(s)"
   if [ "$(action_count)" -gt 0 ]; then
@@ -302,8 +320,50 @@ cmd_off() {
     echo "daemon stopped"
   fi
   revert_actions
+  if stereo_active; then
+    amp_set_chsel mono
+    echo "note: the stereo overlay is still mounted. With the daemon off the"
+    echo "      amp returns to its left slot on the next stream - run"
+    echo "      'stereoctl channels mono' and reboot for stock audio."
+  fi
   echo "disarmed and reverted - controls are yours until 'stereoctl on'"
   echo "note: this survives a reboot. 'stereoctl on' to re-arm."
+}
+
+cmd_channels() {
+  case ${1:-} in
+    '')
+      _act=mono; stereo_active && _act=stereo
+      _stg=mono; stereo_staged && _stg=stereo
+      echo "running: $_act"
+      echo "staged:  $_stg$( [ "$_act" != "$_stg" ] && echo '   (reboot to apply)')"
+      ;;
+    stereo)
+      if _why=$(stage_stereo); then
+        sed -i 's/^CHANNELS=.*/CHANNELS=stereo/' "$CONF" 2>/dev/null
+        grep -q '^CHANNELS=' "$CONF" || echo 'CHANNELS=stereo' >> "$CONF"
+        echo "stereo staged. Reboot to apply."
+        echo
+        echo "  earpiece = left channel, speaker = right channel."
+        echo "  Awinic's speaker protection is off for media in this mode; the"
+        echo "  amp is held ${STEREO_ATTEN_DB:-6} dB down instead (STEREO_ATTEN_DB)."
+        echo "  Back off at the first sign of distortion, and use"
+        echo "  'stereoctl channels mono' for loud listening."
+        echo
+        echo "  Hold the phone with the earpiece on your LEFT (rotate it"
+        echo "  counter-clockwise) for the image to be the right way round."
+      else
+        echo "stereo NOT staged: $_why"
+        return 1
+      fi
+      ;;
+    mono)
+      unstage_stereo
+      sed -i 's/^CHANNELS=.*/CHANNELS=mono/' "$CONF" 2>/dev/null
+      if stereo_active; then echo "mono staged. Reboot to apply."; else echo "mono (already running)"; fi
+      ;;
+    *) echo "usage: stereoctl channels [mono|stereo]"; return 1 ;;
+  esac
 }
 
 cmd_restart() {
@@ -338,6 +398,7 @@ case ${1:-status} in
   ctl)     shift; cmd_ctl "$@" ;;
   dump)    cmd_dump ;;
   diff)    cmd_diff "$2" ;;
+  channels) cmd_channels "$2" ;;
   xml-patch)  sh "$MODDIR/scripts/xml_patch.sh" patch ;;
   xml-revert) sh "$MODDIR/scripts/xml_patch.sh" revert ;;
   -h|--help|help) usage ;;

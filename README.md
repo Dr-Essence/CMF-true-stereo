@@ -3,13 +3,19 @@
 A Magisk / KernelSU / APatch module that makes the **CMF Phone 1** play media
 out of its **earpiece as well as its bottom speaker**.
 
-"Fake stereo" is the honest name. It is two drivers playing the same content —
-louder, fuller and taller than the single bottom-firing speaker — not two
-independent channels. True left/right separation is **not reachable** on this
-phone: the speaker amp and the routing can both carry a separate channel, but
-MediaTek's audio DSP firmware mixes the speaker to mono, and that firmware
-cannot be changed. The [Findings](#findings-what-this-device-actually-does)
-section shows the measurements rather than asking you to take my word.
+It has two channel modes:
+
+- **mono** (default, stock audio): both drivers play the same full mix —
+  louder, fuller and taller than the single bottom-firing speaker. This is
+  where the "fake stereo" name comes from.
+- **stereo**: real left/right. The **earpiece plays the left channel and the
+  speaker the right**. It costs Awinic's speaker-protection processing on
+  media, so the speaker amp is held at a fixed attenuation instead. See
+  [Mono and stereo](#mono-and-stereo).
+
+Getting stereo took finding the two places the phone folds the speaker to
+mono; the [Findings](#findings-what-this-device-actually-does) section shows
+the measurements rather than asking you to take my word.
 
 Verified on **A015 / Tetris, MT6878, Nothing OS B4.1, Android 16.**
 
@@ -21,10 +27,13 @@ Verified on **A015 / Tetris, MT6878, Nothing OS B4.1, Android 16.**
 - Steps aside for headphones and Bluetooth
 - Restores every control it touches on stop, disarm or uninstall
 - Disarms itself if it ever causes a failed boot
+- Optional true stereo (`stereoctl channels stereo`), removed automatically
+  after two failed boots
 
 ## What it does not do
 
-- **No left/right stereo.** The audio DSP firmware mixes the speaker to mono (see Findings).
+- **No speaker protection on media in stereo.** Awinic's DSP processing is the
+  part that folds to mono, so stereo replaces it (see [Mono and stereo](#mono-and-stereo)).
 - **No extra volume from the main speaker.** It is untouched.
 - **Nothing on other devices out of the box.** It installs inert elsewhere and
   ships a probe to work out that device's routing.
@@ -106,36 +115,86 @@ channel to press into service — the internal codec was the only way in.
 
 ## Findings: what this device actually does
 
-### No left/right split, and why
+### Where the speaker is folded to mono
 
-An earlier revision of this section said both transducers were hard-wired to
-channel 1 and that a custom kernel would be needed for stereo. Both claims
-were wrong. Here is what was actually measured, stage by stage, from the
-app to the speaker:
+Earlier revisions of this section said both transducers were hard-wired to
+channel 1, then that a custom kernel would be needed, then that the DSP
+firmware was the limit. All three were wrong. Each stage was measured with a
+test file that has sound on the left channel only and silence on the right,
+by switching the amp to its right slot: silence there means the right channel
+really is separate.
 
-| Stage | Can it carry separate L/R? | Evidence |
+| Stage | Separate L/R? | Evidence |
 |---|---|---|
 | Android framework | Yes | `dumpsys media.audio_flinger`: speaker output is 2-channel FL/FR, *Master mono* off. The policy's speaker port is already stereo, so `stereoctl xml-patch` finds nothing to change. |
-| Dirac (Nothing's speaker tuning) | Inserted on the output mix | Session-0 insert effect; its presets are 2-in/2-out. Removing it alone did not give stereo. |
-| MediaTek audio HAL (`audio.primary.mt6878.so`) | **Mixes to mono** | `AudioALSAPlaybackHandlerBase::doStereoToMonoConversionIfNeed` writes (L+R)/2 to both channels whenever `MTK_AUDIO_NUMBER_OF_SPEAKER` is 1. |
-| Audio DSP (Aurisys `smartpa_awinic`, offload decode) | **Mixes to mono** | With the HAL mix patched out *and* the DSP task flagged as a stereo speaker (`hw_info` bit `0x4`), a left-only signal still reached channel 2. Offload playback (most music apps) is decoded on the DSP and never passes through the HAL code at all. |
+| Dirac (Nothing's speaker tuning) | Not the fold | Session-0 insert effect, 2-in/2-out presets. Removing it alone changed nothing. |
+| MediaTek audio HAL (`audio.primary.mt6878.so`) | **Folds to mono** | `AudioALSAPlaybackHandlerBase::doStereoToMonoConversionIfNeed` writes (L+R)/2 to both channels whenever `MTK_AUDIO_NUMBER_OF_SPEAKER` is 1. Patching it out alone: still mono. |
+| Aurisys on the audio DSP, `smartpa_awinic` | **Folds to mono** | Awinic's speaker protection has one speaker model (`AW_DSP.bin`: five presets, each one 11,244-byte block for one speaker, all carrying 0.5/0.5 weights). With it replaced by MediaTek's pass-through `aurisys_demo` as well, the right slot went **silent** and the left slot still played. |
 | AFE routing | Yes | `I2SOUT4_CH2 <- DL_24CH_CH2` is live during playback. |
-| Awinic amp (`aw882xx`) | Yes | I2S channel select is register `0x06`, bits 11:10 (`01` left, `10` right), writable through `/sys/bus/i2c/devices/6-0034/reg`. Stock is left (`0x34e8`). Set to right (`0x38e8`), cutting `I2SOUT4_CH2` silences the speaker, so the amp really follows the register. |
-| Earpiece | Channel 1 | `RCV <- ADDA_DL_CH1 <- DL_24CH_CH1`; `ADDA_DL_CH1` has no CH2 source. |
+| Awinic amp (`aw882xx`) | Yes | I2S slot select is register `0x06` bits 11:10 (`01` left, `10` right, `11` mono (L+R)/2), writable through the driver's `reg` attribute. Stock is left (`0x34e8`); on the right slot, cutting `I2SOUT4_CH2` silences the speaker. |
+| Earpiece | Left channel | `RCV <- ADDA_DL_CH1 <- DL_24CH_CH1`; `ADDA_DL_CH1` has no CH2 source. |
 
-So every stage this module can reach supports stereo except the last one
-before the amp: the DSP firmware. Setting `MTK_AUDIO_NUMBER_OF_SPEAKER` to 2
-was rejected because it also switches the HAL to a `dual_speaker_output` path
-that does not exist in `audio_device.xml` and puts the Awinic speaker
-protection into two-amp mode with one amp fitted. A kernel cannot help either:
-the routing, the amp driver and the HAL are vendor code, and the DSP firmware
-is sealed.
+A kernel never mattered: the routing, the amp driver, the HAL and the DSP
+libraries are all vendor code. Setting `MTK_AUDIO_NUMBER_OF_SPEAKER` to 2 was
+rejected: it also switches the HAL to a `dual_speaker_output` path that does
+not exist in this phone's `audio_device.xml`, and puts Awinic's protection
+into two-amp mode with one amp fitted.
 
-This module therefore plays the same full mix through both drivers: more
-output and a fuller, taller image than the bottom speaker alone.
+## Mono and stereo
 
-**`stereoctl xml-patch` is a no-op here** — the policy already declares a
-stereo speaker port. The machinery stays in the module for other hardware.
+```sh
+stereoctl channels            # what is running, and what is staged
+stereoctl channels stereo     # stage stereo, then reboot
+stereoctl channels mono       # back to stock, then reboot
+```
+
+The CMF Stereo Manager app has the same switch.
+
+**What stereo changes**, and nothing else:
+
+1. **The HAL fold**: `doStereoToMonoConversionIfNeed` returns at once, and the
+   DSP task is told the speaker is stereo (`hw_info` bit `0x4`, two
+   branches). 16 bytes in three places — exactly the binary that was tested.
+2. **The DSP fold**: `AURISYS_SCENARIO_DSP_PLAYBACK_SMARTPA` runs
+   `aurisys_demo` instead of `smartpa_awinic`. The phone's own
+   `aurisys_config_rv.xml` already declares `aurisys_demo` for that scenario
+   (2 channels in/out, IV reference), so this is a configuration the vendor
+   file provides. **Calls keep `smartpa_awinic`** (`DSP_CALL_FINAL` is
+   untouched).
+3. **The amp slot**: while the earpiece plays, the daemon puts the amp on the
+   right slot; whenever the earpiece is not playing, on mono (L+R)/2, so the
+   speaker never plays one channel alone. The driver resets the slot on every
+   stream start, so the first second or two of a stream is the stock left
+   slot until the daemon's next cycle.
+4. **Attenuation**: the amp is held at least `STEREO_ATTEN_DB` (default 6 dB)
+   down through its own volume control, `aw_dev_0_volume` (1/8 dB steps, per
+   the aw882xx driver). Mono gives the amp its previous value back.
+
+**No vendor file ships in this module.** Staging copies this phone's own
+`audio.primary.mt6878.so`, `audio.primary.mediatek.so` and
+`aurisys_config_rv.xml`, checks their SHA-256 against the analysed build,
+patches them, and checks the result against the tested one before putting it
+in the module's overlay with the original SELinux labels. Anything else —
+another firmware, a different file — is refused and the phone stays on mono.
+After a Nothing OS update the hashes will differ and stereo will refuse until
+the new build has been checked.
+
+**Risks, plainly:**
+
+- Awinic's processing is what keeps the speaker within its excursion and
+  temperature limits at high volume. In stereo, media gets only the amp's
+  hardware over-temperature / over-current cut-outs plus the attenuation. Use
+  mono for loud listening, raise `STEREO_ATTEN_DB` if you play loud in
+  stereo, and back off at the first distortion.
+- The earpiece has no protection in either mode (that was already true).
+- Two failed boots with the stereo overlay in place remove it and set
+  `CHANNELS=mono` — the same watchdog the audio-policy overlay has.
+- With the daemon stopped (`stereoctl off`) the amp goes back to its stock
+  left slot on the next stream, so in stereo the speaker would play the left
+  channel alone. Switch to mono if you want the module off.
+- Hold the phone with the earpiece on your **left** (rotated
+  counter-clockwise) for the image to be the right way round. The earpiece
+  cannot take the right channel: its DAC input has no CH2 source.
 
 MediaTek's "2nd loudspeaker" machinery **is** present on this build, in
 `/vendor/etc/audio_param/`:
@@ -174,6 +233,8 @@ stereoctl scan [pattern]      search the mixer for candidate controls
 stereoctl ctl NAME [VALUE]    read or write one mixer control
 stereoctl dump                every control and its value
 stereoctl diff [seconds]      snapshot the mixer, wait, show what changed
+
+stereoctl channels [mono|stereo]  show / choose the speaker channels (reboot)
 
 stereoctl xml-patch           install the stereo speaker-port overlay (reboot)
 stereoctl xml-revert          remove it (reboot)
