@@ -40,11 +40,16 @@ nothing.
 
 ## Status
 
-**Current release: v0.9.4** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
-in daily use on the test phone. Mono and Stereo switch without a reboot. **Next: v0.9.5** (on
-`main`, not released yet): left and right follow the phone's orientation.
+**Current release: v0.9.5** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
+in daily use on the test phone. Mono and Stereo switch without a reboot, and left and right
+follow the phone's orientation.
 
 **Verified on the phone**
+- v0.9.5 orientation swap: the left-only test file in VLC (deep-buffer output) and in USB Audio
+  Player Pro (primary output, where Nothing's Dirac does the swap): earpiece on your left, the
+  earpiece plays; on your right, the speaker plays. The first build cancelled Dirac's own swap
+  on the primary output; diagnostic builds found it, and the patch now leaves that output to
+  Dirac.
 - v0.9.4 live switching: Mono -> Stereo -> Mono -> Stereo with `stereoctl channels`, no reboot,
   each checked with the left-only test file (speaker silent in Stereo, both play in Mono).
   The first two builds refused it safely (no stock copy; then mounting over the deleted
@@ -61,16 +66,8 @@ in daily use on the test phone. Mono and Stereo switch without a reboot. **Next:
 - Hi-res playback (USB Audio Player Pro, Direct 192 kHz) still works in stereo.
 
 **Not tested on a phone yet**
-- v0.9.5 orientation swap. On the phone so far: the first build swapped VLC (deep-buffer
-  output) correctly but not USB Audio Player Pro (primary output); diagnostic builds showed our
-  swap ran on UAPP's buffers too, and that Nothing's Dirac (attached to the primary output in
-  every dump) already swaps that output with the rotation, so the two cancelled. The patch now
-  leaves the primary output to Dirac. Checked: 16 emulator cases (primary untouched; deep
-  buffer and fast swapped; 16/32-bit; 0/90/270; other routes and formats untouched), the
-  patched HAL disassembles as intended, same hash from dash, mksh and busybox. Needs on the
-  phone: the left-only file in UAPP and in VLC, earpiece on your left (earpiece plays) and on
-  your right (speaker plays). Known limit: with Dirac switched off, apps on the primary output
-  are not swapped (nothing is swapping them then).
+- The orientation swap with Nothing's Dirac switched off: apps on the primary output are then
+  not swapped (known limit; nothing swaps them).
 - Live switching from the app's Mono/Stereo buttons (needs the next app build).
 - v0.9.3: on/off speed and the lighter daemon. Passes the test suite under mksh (Android's
   shell), dash and busybox; needs a check on the phone: `time su -c stereoctl off`, then
