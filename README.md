@@ -40,9 +40,9 @@ nothing.
 
 ## Status
 
-**Current release: v0.9.5** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
-in daily use on the test phone. Mono and Stereo switch without a reboot, and left and right
-follow the phone's orientation.
+**Current release: v0.9.6** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
+in daily use on the test phone. Mono and Stereo switch without a reboot, left and right
+follow the phone's orientation, and Magisk offers new releases as updates.
 
 **Verified on the phone**
 - v0.9.5 orientation swap: the left-only test file in VLC (deep-buffer output) and in USB Audio
@@ -66,6 +66,9 @@ follow the phone's orientation.
 - Hi-res playback (USB Audio Player Pro, Direct 192 kHz) still works in stereo.
 
 **Not tested on a phone yet**
+- v0.9.6 update button: `module.prop` points Magisk at `update.json`, which the release workflow
+  moves to each new version after its zip is published. Seen working only once a later release
+  (v0.9.7) is out: Magisk should then show Update for this module.
 - The orientation swap with Nothing's Dirac switched off: apps on the primary output are then
   not swapped (known limit; nothing swaps them).
 - Live switching from the app's Mono/Stereo buttons (needs the next app build).
@@ -94,6 +97,7 @@ follow the phone's orientation.
 - `ADDA_DL_MAX_VOL` was tried for a louder earpiece: no clear difference, left out.
 
 **Fixed recently**
+- v0.9.6: Magisk showed an out-of-date module description (Stereo "needs a reboot").
 - v0.9.5: turned with the earpiece on your right, left and right came out reversed.
 - v0.9.4: switching Mono and Stereo needed a reboot; it now restarts only the audio HAL.
   From a stereo boot, the stock files are rebuilt from the stereo ones (original bytes back,
@@ -276,6 +280,9 @@ not exist in this phone's `audio_device.xml`, and puts Awinic's protection
 into two-amp mode with one amp fitted.
 
 ## Mono and stereo
+
+**Checksums**: every release lists the SHA-256 of its files, in the description and in
+`SHA256SUMS.txt`.
 
 **Test files**: every release carries `LEFT_ONLY_3min.wav` (left channel only) and
 `LEFT10s_RIGHT10s.wav` (spoken "left" / "right", then 10 s from that side only), built by

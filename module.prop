@@ -1,6 +1,7 @@
 id=cmf_stereo
 name=CMF Phone 1 Dual Speaker (mono / stereo)
-version=v0.9.5
-versionCode=950
+version=v0.9.6
+versionCode=960
 author=Tiimoo-debug
-description=Plays media through the earpiece as well as the bottom speaker on the CMF Phone 1 (A015 / mt6878). Two channel modes: mono (stock, both drivers play the full mix with Awinic speaker protection) and stereo (earpiece left, speaker right; switches off the HAL and Awinic DSP mono fold and holds a fixed amp attenuation instead). Stereo patches this phone's own vendor files only after hash checks, needs a reboot, and is removed automatically after two failed boots. Installs inert on other devices. Bundled static tinymix, headphone guard, boot watchdog.
+description=Real left/right stereo on the CMF Phone 1 (A015 / mt6878): earpiece left, bottom speaker right, swapped when the phone is turned the other way. Mono (stock, both drivers play the full mix with Awinic speaker protection) or Stereo, switched at once from the app or stereoctl. Patches this phone's own vendor files only after hash checks; removed automatically after two failed boots. Installs inert on other devices.
+updateJson=https://raw.githubusercontent.com/Dr-Essence/CMF-true-stereo/main/update.json

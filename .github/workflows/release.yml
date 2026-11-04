@@ -60,6 +60,17 @@ jobs:
           python3 tools/make-test-audio.py test-audio
           ls -l test-audio
 
+      # SHA-256 of everything attached, as a file and in the description, so
+      # anyone can check a download is the file published here.
+      - name: Checksums
+        run: |
+          sha256sum "$ZIP" test-audio/LEFT_ONLY_3min.wav test-audio/LEFT10s_RIGHT10s.wav \
+            | sed 's#  .*/#  #' > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          cp "$NOTES" release-body-final.md
+          { echo; echo '### Checksums (SHA-256)'; echo '```'; cat SHA256SUMS.txt; echo '```'; } >> release-body-final.md
+          echo "NOTES=release-body-final.md" >> "$GITHUB_ENV"
+
       - uses: actions/upload-artifact@v4
         with:
           name: module
@@ -78,3 +89,25 @@ jobs:
             ${{ env.ZIP }}
             test-audio/LEFT_ONLY_3min.wav
             test-audio/LEFT10s_RIGHT10s.wav
+            SHA256SUMS.txt
+
+      # Magisk / KernelSU / APatch read update.json (module.prop updateJson) to
+      # offer the update. It moves to this version only now, after the
+      # release and its zip exist.
+      - name: Update link
+        run: |
+          CODE=$(grep '^versionCode=' module.prop | cut -d= -f2)
+          git fetch -q origin main && git checkout -q -B main origin/main
+          cat > update.json <<JSON
+          {
+            "version": "$VER",
+            "versionCode": $CODE,
+            "zipUrl": "https://github.com/${{ github.repository }}/releases/download/$VER/$ZIP",
+            "changelog": "https://raw.githubusercontent.com/${{ github.repository }}/main/docs/releases/$VER.md"
+          }
+          JSON
+          cat update.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update.json
+          git commit -q -m "update.json: $VER" && git push -q origin HEAD:main || echo "update.json unchanged"

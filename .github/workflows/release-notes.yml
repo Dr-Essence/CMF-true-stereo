@@ -24,7 +24,12 @@ jobs:
           for f in docs/releases/*.md; do
             tag=$(basename "$f" .md)
             if gh release view "$tag" >/dev/null 2>&1; then
-              gh release edit "$tag" --notes-file "$f" && echo "updated $tag"
+              # Keep the checksums the release workflow published.
+              cp "$f" "$RUNNER_TEMP/notes.md"
+              if gh release download "$tag" -p SHA256SUMS.txt -O "$RUNNER_TEMP/sums.txt" 2>/dev/null; then
+                { echo; echo '### Checksums (SHA-256)'; echo '```'; cat "$RUNNER_TEMP/sums.txt"; echo '```'; } >> "$RUNNER_TEMP/notes.md"
+              fi
+              gh release edit "$tag" --notes-file "$RUNNER_TEMP/notes.md" && echo "updated $tag"
             else
               echo "no release $tag yet - skipped"
             fi
