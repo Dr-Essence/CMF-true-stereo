@@ -277,6 +277,11 @@ into two-amp mode with one amp fitted.
 
 ## Mono and stereo
 
+**Test files**: every release carries `LEFT_ONLY_3min.wav` (left channel only) and
+`LEFT10s_RIGHT10s.wav` (spoken "left" / "right", then 10 s from that side only), built by
+`tools/make-test-audio.py`. In Stereo the left-only file plays from the earpiece alone, or the
+speaker alone when the phone is turned with the earpiece on your right; in Mono from both.
+
 ```sh
 stereoctl channels            # what is running, and what is staged
 stereoctl channels stereo     # switch to stereo now

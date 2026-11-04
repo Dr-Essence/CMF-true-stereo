@@ -51,6 +51,15 @@ jobs:
           fi
           echo "NOTES=$NOTES" >> "$GITHUB_ENV"
 
+      # The stereo test files, rebuilt from tools/make-test-audio.py (fixed
+      # seeds) and attached so anyone can check left and right themselves.
+      - name: Test audio
+        run: |
+          sudo apt-get install -y -qq espeak-ng >/dev/null
+          python3 -m pip install -q numpy
+          python3 tools/make-test-audio.py test-audio
+          ls -l test-audio
+
       - uses: actions/upload-artifact@v4
         with:
           name: module
@@ -65,4 +74,7 @@ jobs:
           # docs/releases/<version>.md when it exists (the Release notes
           # workflow keeps it in sync afterwards), else the generic text.
           body_path: ${{ env.NOTES }}
-          files: ${{ env.ZIP }}
+          files: |
+            ${{ env.ZIP }}
+            test-audio/LEFT_ONLY_3min.wav
+            test-audio/LEFT10s_RIGHT10s.wav
