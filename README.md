@@ -76,6 +76,9 @@ lighter; it has not been on the phone yet.
 - v0.9.3: on/off waited on fixed sleeps: up to 2 s for the daemon to notice the stop, 1 s
   polling for it to exit, and a flat 2 s after restarting it. The daemon now stops the moment
   it is told to and both waits poll in tenths of a second.
+- v0.9.3: finding the daemon started two programs for every process on the phone (several
+  hundred), at least twice per on/off. It now checks only shells and the daemon itself.
+  Measured in a test container with a running daemon: `on` 0.05 s, `off` 0.18 s.
 - v0.9.3: `stereoctl status brief` for the app, without reading every control back.
 - v0.9.2: earpiece gain was 31 (the codec's mute value), not the maximum.
 - v0.9.1: three daemons fought over the mixer; `status` reported "not running".

@@ -387,11 +387,21 @@ _is_daemon() {
   return 1
 }
 
+# A phone runs several hundred processes, and _is_daemon starts two programs
+# for each one it checks, so it only checks the candidates: processes whose
+# name (read with the shell's own `read`, no new process) is a shell, or the
+# daemon itself when it was started through its #! line ("stereo-daemon.s",
+# the name cut to 15 characters). Checking every pid cost seconds on each
+# on/off.
 daemon_pids() {
   for _d in /proc/[0-9]*; do
     _p=${_d#/proc/}
     [ "$_p" = "$$" ] && continue
-    _is_daemon "$_p" && echo "$_p"
+    _c=
+    { read -r _c < "$_d/comm"; } 2>/dev/null || continue
+    case $_c in
+      sh|mksh|ash|dash|bash|busybox|stereo-daemon*) _is_daemon "$_p" && echo "$_p" ;;
+    esac
   done
 }
 
