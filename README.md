@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/banner.png" alt="CMF true stereo - earpiece left, speaker right" width="100%"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/Dr-Essence/CMF-true-stereo/main/docs/banner.png" alt="CMF true stereo - earpiece left, speaker right" width="100%"></p>
 
 # CMF-true-stereo
 
