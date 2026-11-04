@@ -40,11 +40,16 @@ nothing.
 
 ## Status
 
-**Current release: v0.9.3** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
-in daily use on the test phone. **Next: v0.9.4** (on `main`, not released yet) switches Mono and
-Stereo without a reboot and stops the daemon flooding the kernel log.
+**Current release: v0.9.4** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
+in daily use on the test phone. Mono and Stereo switch without a reboot.
 
 **Verified on the phone**
+- v0.9.4 live switching: Mono -> Stereo -> Mono -> Stereo with `stereoctl channels`, no reboot,
+  each checked with the left-only test file (speaker silent in Stereo, both play in Mono).
+  The first two builds refused it safely (no stock copy; then mounting over the deleted
+  files Magisk had mounted), which is what the final design fixed.
+- v0.9.4 kernel log: boot messages intact, one `aw882xx_volume_put` at boot instead of a
+  `volume_get` line every cycle.
 - Stereo: a left-only test file leaves the speaker silent on its right slot and plays on the
   earpiece, with Nothing's Dirac tuning on and off.
 - Mono and stereo switching through `stereoctl channels` and the app, with a reboot.
@@ -55,19 +60,7 @@ Stereo without a reboot and stops the daemon flooding the kernel log.
 - Hi-res playback (USB Audio Player Pro, Direct 192 kHz) still works in stereo.
 
 **Not tested on a phone yet**
-- v0.9.4 live switching (`stereoctl channels stereo|mono` and the app). Passes 13 new tests with
-  real bind mounts on stand-in files (dash, mksh, busybox); on the phone it needs: Mono -> Stereo
-  and back, each with the left-only test file, `stereoctl status` showing the right channels,
-  and `stereoctl log` showing "live stereo: applied". Also unproven there: `nsenter` reaching
-  init's mount namespace (if it cannot, the switch is refused and waits for a reboot).
-  On the phone so far: from a stereo boot, `channels mono` was refused safely, first for lack of
-  a stock copy (now rebuilt from the stereo files: exact stock hashes on the real files), then
-  with "cannot mount over" (ENOENT): unstaging had deleted the files Magisk had bind-mounted,
-  and Linux refuses to mount over a deleted file. A live switch now takes our own mounts off
-  (only ours; anything else is refused) instead of mounting on top. Reproduced in the tests.
-- v0.9.4: the amp attenuation check at playback start and every 10th cycle instead of every
-  cycle (simulated: 3 checks in 25 cycles instead of 25). Needs `dmesg | grep -c aw882xx_volume_get`
-  to stay low while the earpiece and speaker still play at the set levels.
+- Live switching from the app's Mono/Stereo buttons (needs the next app build).
 - v0.9.3: on/off speed and the lighter daemon. Passes the test suite under mksh (Android's
   shell), dash and busybox; needs a check on the phone: `time su -c stereoctl off`, then
   `time su -c stereoctl on`, and the earpiece still engaging when audio starts.
