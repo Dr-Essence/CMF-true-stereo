@@ -461,6 +461,82 @@ check "one style probe for many calls" "$(grep -c '^--help' "$STUBLOG")" "1"
 check "reads still work" "$_a$_b" "33"
 unset TINYMIX TINYMIX_STYLE
 
+echo "live switching"
+# Real bind mounts over fake vendor files; getprop/setprop/dumpsys stand in for
+# init's audio HAL service. Needs root (mount): skipped when not available.
+L=$TMP/live; mkdir -p "$L/vendor/lib64/hw" "$L/vendor/etc" "$L/ov/hw" "$L/ov/etc" "$L/bin"
+echo STOCK-HAL > "$L/vendor/lib64/hw/audio.primary.mt6878.so"
+echo STOCK-HAL > "$L/vendor/lib64/hw/audio.primary.mediatek.so"
+printf '<aurisys_config>\n</aurisys_config>\n' > "$L/vendor/etc/aurisys_config_rv.xml"
+echo STEREO-HAL > "$L/ov/hw/audio.primary.mt6878.so"
+echo STEREO-HAL > "$L/ov/hw/audio.primary.mediatek.so"
+printf '<aurisys_config>\n<!-- cmf_stereo: stereo -->\n</aurisys_config>\n' > "$L/ov/etc/aurisys_config_rv.xml"
+if mount --bind "$L/ov/hw/audio.primary.mt6878.so" "$L/vendor/lib64/hw/audio.primary.mt6878.so" 2>/dev/null; then
+  umount "$L/vendor/lib64/hw/audio.primary.mt6878.so"
+  echo 100 > "$L/pid"; echo 0 > "$L/restarts"; echo 0 > "$L/callstate"; echo good > "$L/hal"
+  cat > "$L/bin/getprop" <<STUB
+#!/bin/sh
+case \$1 in
+  init.svc_debug_pid.vendor.audio-hal) cat "$L/pid" ;;
+  init.svc.vendor.audio-hal) echo running ;;
+esac
+STUB
+  # A good HAL comes back as a new process; a broken one never gets a new pid.
+  cat > "$L/bin/setprop" <<STUB
+#!/bin/sh
+[ "\$1" = ctl.restart ] || exit 0
+echo \$((\$(cat "$L/restarts") + 1)) > "$L/restarts"
+[ "\$(cat "$L/hal")" = good ] && echo \$((\$(cat "$L/pid") + 1)) > "$L/pid"
+exit 0
+STUB
+  printf '#!/bin/sh\necho "mCallState=$(cat %s/callstate)"\n' "$L" > "$L/bin/dumpsys"
+  chmod +x "$L/bin/"*
+  _OPATH=$PATH; PATH=$L/bin:$PATH
+  _OHAL_DIR=$HAL_DIR; _OAUR=$AUR; _OOV_HAL=$OV_HAL; _OOV_ETC=$OV_ETC
+  _OHS=$HAL_STOCK; _OHX=$HAL_STEREO; _OAS=$AUR_STOCK; _OAX=$AUR_STEREO; _OLR=$LIVE_ROOT
+  HAL_DIR=$L/vendor/lib64/hw; AUR=$L/vendor/etc/aurisys_config_rv.xml
+  OV_HAL=$L/ov/hw; OV_ETC=$L/ov/etc; LIVE_ROOT=
+  HAL_STOCK=$(_sha "$HAL_DIR/audio.primary.mt6878.so"); AUR_STOCK=$(_sha "$AUR")
+  HAL_STEREO=$(_sha "$OV_HAL/audio.primary.mt6878.so"); AUR_STEREO=$(_sha "$OV_ETC/aurisys_config_rv.xml")
+  tick() { :; }
+
+  check "stock saved while mono" "$(save_stock && _sha "$STOCKDIR/audio.primary.mediatek.so")" "$HAL_STOCK"
+  live_switch stereo >/dev/null; _rc=$?
+  check "mono -> stereo live" "$_rc $(stereo_active && echo stereo)" "0 stereo"
+  check "both HAL names read as stereo" "$(cat "$HAL_DIR/audio.primary.mt6878.so" "$HAL_DIR/audio.primary.mediatek.so" | tr '\n' ' ')" "STEREO-HAL STEREO-HAL "
+  check "HAL restarted once" "$(cat "$L/restarts")" "1"
+  check "already stereo: nothing restarted" "$(live_switch stereo >/dev/null; cat "$L/restarts")" "1"
+  # Back to mono: our mounts come off; the HAL must restart even though
+  # nothing new is mounted (it still runs the stereo binary).
+  live_switch mono >/dev/null; _rc=$?
+  check "stereo -> mono live" "$_rc $(stereo_active && echo stereo || echo mono)" "0 mono"
+  check "HAL restarted for mono" "$(cat "$L/restarts")" "2"
+  check "no mounts left" "$([ -f "$LIVEFILE" ] && wc -l < "$LIVEFILE" | tr -d ' ' || echo 0)" "0"
+
+  echo 1 > "$L/callstate"
+  check "refused during a call" "$(live_switch stereo)" "a call is active"
+  check "nothing mounted for it" "$(stereo_active && echo stereo || echo mono)" "mono"
+  echo 0 > "$L/callstate"
+
+  echo bad > "$L/hal"
+  check "HAL that does not come back: refused" "$(live_switch stereo)" "the audio HAL did not come back on the stereo files"
+  check "and undone" "$(stereo_active && echo stereo || echo mono) $([ -s "$LIVEFILE" ] && echo mounts || echo clean)" "mono clean"
+  echo good > "$L/hal"
+
+  # Booted stereo (the stock files are not visible): mono needs a saved copy.
+  rm -rf "$STOCKDIR"
+  mount --bind "$OV_ETC/aurisys_config_rv.xml" "$AUR"
+  check "mono without a stock copy: refused" "$(live_switch mono)" "no verified mono copy of audio.primary.mt6878.so"
+  umount "$AUR"
+
+  live_unmount
+  PATH=$_OPATH; HAL_DIR=$_OHAL_DIR; AUR=$_OAUR; OV_HAL=$_OOV_HAL; OV_ETC=$_OOV_ETC
+  HAL_STOCK=$_OHS; HAL_STEREO=$_OHX; AUR_STOCK=$_OAS; AUR_STEREO=$_OAX; LIVE_ROOT=$_OLR
+  tick() { sleep 0.1 2>/dev/null || sleep 1; }
+else
+  echo "  skip - bind mounts need root"
+fi
+
 echo
 echo "passed $PASS, failed $FAIL"
 [ "$FAIL" -eq 0 ]

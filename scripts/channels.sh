@@ -28,7 +28,9 @@
 # place, after their hashes prove they are the build that was analysed, and the
 # result is hashed again before it is staged. Anything else is refused.
 #
-# The overlay is mounted at boot, so a change of mode needs a reboot.
+# The overlay is mounted at boot. A change of mode is also applied at once
+# when it can be (live switching, below): the HAL is restarted on the wanted
+# files instead of rebooting the phone.
 
 HAL_NAMES="audio.primary.mt6878.so audio.primary.mediatek.so"
 HAL_DIR=/vendor/lib64/hw
@@ -69,9 +71,16 @@ _patch_aurisys() {
   ' "$1" > "$2"
 }
 
-# What the running system is using right now (the overlay is mounted at boot).
+# A vendor path as init (and so the audio HAL service) sees it. stereoctl can
+# run in an app's mount namespace, which does not see a live switch.
+LIVE_ROOT=${LIVE_ROOT-/proc/1/root}
+_view() {
+  if [ -n "$LIVE_ROOT" ] && [ -r "$LIVE_ROOT$1" ]; then echo "$LIVE_ROOT$1"; else echo "$1"; fi
+}
+
+# What the running system is using right now.
 stereo_active() {
-  grep -q "$AUR_MARK" "$AUR" 2>/dev/null
+  grep -q "$AUR_MARK" "$(_view "$AUR")" 2>/dev/null
 }
 
 stereo_staged() {
@@ -134,6 +143,131 @@ unstage_stereo() {
   # Leave system/bin in place: it carries the stereoctl shim.
   rmdir "$OV_HAL" "$MODDIR/system/vendor/lib64" "$OV_ETC" "$MODDIR/system/vendor" 2>/dev/null
   log info "stereo: overlay removed (mono after reboot)"
+  return 0
+}
+
+##############################################################################
+# Live switching (no reboot)
+#
+# Measured on the CMF Phone 1: `setprop ctl.restart vendor.audio-hal` brings
+# the HAL back within seconds, audioserver reconnects on its own and calls
+# work; players pause and need play again. So a mode change mounts the wanted
+# files over the vendor paths and restarts the HAL instead of the phone.
+#
+# The boot-time overlay belongs to the root manager (Magisk magic mount,
+# KernelSU overlayfs) and cannot be taken back file by file, so a live switch
+# always mounts on top: the staged stereo files, or a copy of the phone's own
+# stock files saved, hash-checked, while it ran mono. Mounts go into init's
+# mount namespace, where the HAL service runs, and are checked there through
+# /proc/1/root. Anything that does not check out is undone, and the change
+# waits for a reboot instead.
+##############################################################################
+
+STOCKDIR=$DATADIR/stock
+LIVEFILE=$DATADIR/live_mounts
+HAL_SVC=vendor.audio-hal
+
+# Run a command in init's mount namespace.
+_global() {
+  if [ -z "$LIVE_ROOT" ] || \
+     [ "$(readlink /proc/self/ns/mnt 2>/dev/null)" = "$(readlink /proc/1/ns/mnt 2>/dev/null)" ]; then
+    "$@"
+  else
+    nsenter -t 1 -m -- "$@"
+  fi
+}
+
+# Copy the phone's own stock files, once, for switching back to mono live.
+save_stock() {
+  mkdir -p "$STOCKDIR" || return 1
+  for _n in $HAL_NAMES aurisys_config_rv.xml; do
+    case $_n in
+      aurisys_config_rv.xml) _src=$AUR; _x=$AUR_STOCK ;;
+      *) _src=$HAL_DIR/$_n; _x=$HAL_STOCK ;;
+    esac
+    [ "$(_sha "$STOCKDIR/$_n")" = "$_x" ] && continue
+    [ "$(_sha "$(_view "$_src")")" = "$_x" ] || return 1
+    cp -f "$(_view "$_src")" "$STOCKDIR/$_n.tmp" && mv -f "$STOCKDIR/$_n.tmp" "$STOCKDIR/$_n" || return 1
+    chmod 0644 "$STOCKDIR/$_n"
+    chcon "$(ls -Z "$(_view "$_src")" | awk '{print $1}')" "$STOCKDIR/$_n" 2>/dev/null
+  done
+  return 0
+}
+
+# Take back the mounts an earlier live switch made.
+live_unmount() {
+  [ -f "$LIVEFILE" ] || return 0
+  while read -r _p; do
+    [ -n "$_p" ] && { _global umount "$_p" 2>/dev/null || _global umount -l "$_p" 2>/dev/null; }
+  done < "$LIVEFILE"
+  rm -f "$LIVEFILE"
+}
+
+in_call() {
+  dumpsys telephony.registry 2>/dev/null | grep -q 'mCallState=[12]'
+}
+
+# Restart the audio HAL and wait for a new process that stays up.
+hal_restart() {
+  _old=$(getprop "init.svc_debug_pid.$HAL_SVC")
+  setprop ctl.restart "$HAL_SVC" || return 1
+  _w=0; _new=
+  while [ $_w -lt 80 ]; do
+    tick; _w=$((_w + 1))
+    _new=$(getprop "init.svc_debug_pid.$HAL_SVC")
+    [ "$(getprop "init.svc.$HAL_SVC")" = running ] && [ -n "$_new" ] && [ "$_new" != "$_old" ] && break
+  done
+  [ $_w -lt 80 ] || return 1
+  # Still the same process 3 s later: it is not crash-looping.
+  _w=0; while [ $_w -lt 30 ]; do tick; _w=$((_w + 1)); done
+  [ "$(getprop "init.svc.$HAL_SVC")" = running ] && [ "$(getprop "init.svc_debug_pid.$HAL_SVC")" = "$_new" ]
+}
+
+# live_switch mono|stereo -> 0 when the running system now uses that mode;
+# prints the reason otherwise (and leaves the system as it was).
+live_switch() {
+  case $1 in
+    stereo) _hs=$OV_HAL;   _as=$OV_ETC/aurisys_config_rv.xml;  _hx=$HAL_STEREO; _ax=$AUR_STEREO ;;
+    mono)   _hs=$STOCKDIR; _as=$STOCKDIR/aurisys_config_rv.xml; _hx=$HAL_STOCK;  _ax=$AUR_STOCK ;;
+    *) echo "unknown mode $1"; return 1 ;;
+  esac
+  # The HAL loaded its files when it last started, so it runs what the
+  # system shows now; nothing to do if that is already the wanted mode.
+  _now=mono; stereo_active && _now=stereo
+  [ "$_now" = "$1" ] && return 0
+  if in_call; then echo "a call is active"; return 1; fi
+  for _n in $HAL_NAMES; do
+    [ "$(_sha "$_hs/$_n")" = "$_hx" ] || { echo "no verified $1 copy of $_n"; return 1; }
+  done
+  [ "$(_sha "$_as")" = "$_ax" ] || { echo "no verified $1 copy of aurisys_config_rv.xml"; return 1; }
+
+  live_unmount
+  : > "$LIVEFILE"
+  _fail=
+  for _n in $HAL_NAMES aurisys_config_rv.xml; do
+    case $_n in
+      aurisys_config_rv.xml) _dst=$AUR; _src=$_as; _x=$_ax ;;
+      *) _dst=$HAL_DIR/$_n; _src=$_hs/$_n; _x=$_hx ;;
+    esac
+    [ "$(_sha "$(_view "$_dst")")" = "$_x" ] && continue
+    _global mount -o bind "$_src" "$_dst" || { _fail="cannot mount over $_dst"; break; }
+    echo "$_dst" >> "$LIVEFILE"
+    [ "$(_sha "$(_view "$_dst")")" = "$_x" ] || { _fail="$_dst does not read back as the $1 file"; break; }
+  done
+  if [ -n "$_fail" ]; then
+    live_unmount
+    log warn "live $1: $_fail - undone"
+    echo "$_fail"
+    return 1
+  fi
+  if ! hal_restart; then
+    live_unmount
+    hal_restart
+    log warn "live $1: the audio HAL did not come back - undone"
+    echo "the audio HAL did not come back on the $1 files"
+    return 1
+  fi
+  log info "live $1: applied (audio HAL restarted)"
   return 0
 }
 

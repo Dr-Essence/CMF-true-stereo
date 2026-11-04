@@ -33,7 +33,8 @@ stereoctl - CMF Phone 1 stereo speaker control
                       you find which controls actually carry media)
 
   channels [mono|stereo]
-                      show or choose the speaker channels (reboot to apply)
+                      show or choose the speaker channels (applied at once
+                      by restarting the audio HAL; else after a reboot)
                       mono   = stock: both drivers play the full mix, with
                                Awinic speaker protection
                       stereo = earpiece left, speaker right. Awinic's DSP
@@ -339,10 +340,18 @@ cmd_channels() {
       echo "staged:  $_stg$( [ "$_act" != "$_stg" ] && echo '   (reboot to apply)')"
       ;;
     stereo)
+      # Mono is running: keep a copy of its stock files for switching back live.
+      stereo_active || save_stock
       if _why=$(stage_stereo); then
         sed -i 's/^CHANNELS=.*/CHANNELS=stereo/' "$CONF" 2>/dev/null
         grep -q '^CHANNELS=' "$CONF" || echo 'CHANNELS=stereo' >> "$CONF"
-        echo "stereo staged. Reboot to apply."
+        if stereo_active; then
+          echo "stereo (already running)"
+        elif _w=$(live_switch stereo); then
+          echo "stereo applied now (audio restarted - press play again)"
+        else
+          echo "stereo staged. Reboot to apply ($_w)."
+        fi
         echo
         echo "  earpiece = left channel, speaker = right channel."
         echo "  Awinic's speaker protection is off for media in this mode; the"
@@ -360,7 +369,16 @@ cmd_channels() {
     mono)
       unstage_stereo
       sed -i 's/^CHANNELS=.*/CHANNELS=mono/' "$CONF" 2>/dev/null
-      if stereo_active; then echo "mono staged. Reboot to apply."; else echo "mono (already running)"; fi
+      if ! stereo_active; then
+        echo "mono (already running)"
+      elif _w=$(live_switch mono); then
+        # The amp's own gain and slot back, as at a mono boot.
+        amp_release_atten
+        amp_set_chsel left
+        echo "mono applied now (audio restarted - press play again)"
+      else
+        echo "mono staged. Reboot to apply ($_w)."
+      fi
       ;;
     *) echo "usage: stereoctl channels [mono|stereo]"; return 1 ;;
   esac

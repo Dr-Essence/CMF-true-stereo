@@ -22,7 +22,8 @@ speaker, the bottom speaker the right — no custom kernel, just root.
 
 1. Flash the zip in **Magisk / KernelSU / APatch** and reboot.
 2. Open **CMF Stereo** and pick **Stereo** — or in a terminal: `su -c stereoctl channels stereo`.
-3. Reboot. Hold the phone with the earpiece on your **left**.
+   It switches at once (the sound stops for a moment; press play again).
+3. Hold the phone with the earpiece on your **left**.
 
 Works on the **CMF Phone 1 (A015)**. On any other phone it installs and does
 nothing.
@@ -40,18 +41,25 @@ nothing.
 ## Status
 
 **Current release: v0.9.3** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
-in daily use on the test phone. **Next: v0.9.4** (on `main`, not released yet) stops the daemon
-flooding the kernel log.
+in daily use on the test phone. **Next: v0.9.4** (on `main`, not released yet) switches Mono and
+Stereo without a reboot and stops the daemon flooding the kernel log.
 
 **Verified on the phone**
 - Stereo: a left-only test file leaves the speaker silent on its right slot and plays on the
   earpiece, with Nothing's Dirac tuning on and off.
 - Mono and stereo switching through `stereoctl channels` and the app, with a reboot.
+- Restarting the audio HAL by hand (`setprop ctl.restart vendor.audio-hal`) while playing:
+  the HAL came back, players paused, calls worked.
 - One daemon per boot (three were starting before v0.9.1).
 - Earpiece at +8 dB (`Handset Volume 0`) while playing; the old 31 is corrected on install.
 - Hi-res playback (USB Audio Player Pro, Direct 192 kHz) still works in stereo.
 
 **Not tested on a phone yet**
+- v0.9.4 live switching (`stereoctl channels stereo|mono` and the app). Passes 13 new tests with
+  real bind mounts on stand-in files (dash, mksh, busybox); on the phone it needs: Mono -> Stereo
+  and back, each with the left-only test file, `stereoctl status` showing the right channels,
+  and `stereoctl log` showing "live stereo: applied". Also unproven there: `nsenter` reaching
+  init's mount namespace (if it cannot, the switch is refused and waits for a reboot).
 - v0.9.4: the amp attenuation check at playback start and every 10th cycle instead of every
   cycle (simulated: 3 checks in 25 cycles instead of 25). Needs `dmesg | grep -c aw882xx_volume_get`
   to stay low while the earpiece and speaker still play at the set levels.
@@ -80,6 +88,7 @@ flooding the kernel log.
 - `ADDA_DL_MAX_VOL` was tried for a louder earpiece: no clear difference, left out.
 
 **Fixed recently**
+- v0.9.4: switching Mono and Stereo needed a reboot; it now restarts only the audio HAL.
 - v0.9.4: the daemon read the amp's volume every cycle, and the Awinic driver logs each read,
   so dmesg filled with `aw882xx_volume_get` lines (about 20 a minute) and lost the boot
   messages.
@@ -157,7 +166,7 @@ stereoctl solo       # speaker off, earpiece only - proves it is really the earp
 stereoctl unsolo
 ```
 
-For real stereo, then reboot:
+For real stereo (applied at once):
 
 ```sh
 su -c stereoctl channels stereo
@@ -261,11 +270,22 @@ into two-amp mode with one amp fitted.
 
 ```sh
 stereoctl channels            # what is running, and what is staged
-stereoctl channels stereo     # stage stereo, then reboot
-stereoctl channels mono       # back to stock, then reboot
+stereoctl channels stereo     # switch to stereo now
+stereoctl channels mono       # back to stock now
 ```
 
 The CMF Stereo Manager app has the same switch.
+
+**Switching without a reboot** (v0.9.4). The module restarts the audio HAL
+(`setprop ctl.restart vendor.audio-hal`) on the wanted files instead of
+rebooting: about a second of silence, players pause, calls are unaffected
+(measured on the CMF Phone 1). The boot-time overlay belongs to the root manager
+and cannot be taken back file by file, so a live switch mounts on top of it, in
+init's mount namespace where the HAL runs: the staged stereo files, or a copy of
+the phone's own stock files, saved and hash-checked while it ran mono. Every
+file is read back through `/proc/1/root` and must hash to the expected build;
+the new HAL process must still be running 3 s later. If any check fails, or a
+call is active, the mounts are undone and the change waits for a reboot.
 
 **What stereo changes**, and nothing else:
 
@@ -351,7 +371,7 @@ stereoctl ctl NAME [VALUE]    read or write one mixer control
 stereoctl dump                every control and its value
 stereoctl diff [seconds]      snapshot the mixer, wait, show what changed
 
-stereoctl channels [mono|stereo]  show / choose the speaker channels (reboot)
+stereoctl channels [mono|stereo]  show / choose the speaker channels (applied at once)
 
 stereoctl xml-patch           install the stereo speaker-port overlay (reboot)
 stereoctl xml-revert          remove it (reboot)
