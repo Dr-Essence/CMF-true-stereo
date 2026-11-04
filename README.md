@@ -55,14 +55,16 @@ Verified on **A015 / Tetris, MT6878, Nothing OS B4.1, Android 16.**
 
 ## What it does
 
+- **Real stereo** in stereo mode: earpiece = left channel, bottom speaker = right
+- **Mono** mode: both speakers play the full mix, with full speaker protection
 - Plays media through the earpiece alongside the speaker, automatically
 - Earpiece at the receiver amp's maximum, +8 dB (`Handset Volume 0`), the same value the HAL uses
 - Applies only while audio is playing, so the receiver is not held energised
 - Steps aside for headphones and Bluetooth
 - Restores every control it touches on stop, disarm or uninstall
 - Disarms itself if it ever causes a failed boot
-- Optional true stereo (`stereoctl channels stereo`), removed automatically
-  after two failed boots
+- Switch modes with `stereoctl channels mono|stereo` or the app; the stereo
+  overlay removes itself after two failed boots
 
 ## What it does not do
 
@@ -87,6 +89,12 @@ stereoctl solo       # speaker off, earpiece only - proves it is really the earp
 stereoctl unsolo
 ```
 
+For real stereo, then reboot:
+
+```sh
+su -c stereoctl channels stereo
+```
+
 If it is ever silent, `stereoctl doctor` walks every layer that can cause that
 and names the one responsible.
 
@@ -108,7 +116,8 @@ Three layers, smallest hammer first.
 **1. Mixer actions (`actions.conf`).** The real work. An ALSA mixer control
 somewhere enables the receiver output stage; on MediaTek there is usually also
 a routing control that decides which DL (downlink) stream feeds it. Setting
-those while the speaker is playing is what produces two channels.
+those while the speaker is playing is what puts the earpiece to work next to
+the speaker.
 
 The audio HAL rewrites mixer controls on every route change, so a one-shot
 write does not survive the next stream start. A small daemon re-asserts the
@@ -146,6 +155,12 @@ on, then open `RCV Mux`, and the earpiece plays.
 
 There is only one Awinic device (`aw_dev_0`), so there is no second amp
 channel to press into service — the internal codec was the only way in.
+
+That alone gives both drivers the same full mix: **mono mode**. Real stereo
+needed one more step — switching off the two places the phone folds the
+speaker to mono — which is what `stereoctl channels stereo` adds (see
+[Findings](#findings-what-this-device-actually-does) and
+[Mono and stereo](#mono-and-stereo)).
 
 ## Findings: what this device actually does
 
@@ -451,7 +466,8 @@ and is retracted.
 ### Why its stereo approach doesn't work on this device
 
 Not a criticism of the approach — it is sound on hardware that has a second
-loudspeaker. Two things stop it here:
+loudspeaker. Two things stop it here (this module's stereo comes from a
+different route entirely, see [Mono and stereo](#mono-and-stereo)):
 
 - `Playback_ParamTreeView.xml` is the **view definition** for MediaTek's
   parameter tuning tool (`TreeRoot`, `Feature`, `FieldList`,
@@ -549,7 +565,8 @@ it up —
 [Xiaomi Merlin](https://github.com/Charlie-117/merlin_DualSpeaker_mod),
 [LeEco Le Max 2](https://github.com/J3is/Dual-Speaker-x2),
 [whyred](https://xdaforums.com/t/magisk-dual-speaker-mod-for-whyred.3845595/).
-They are also the reason "pseudo-stereo" is the honest label for this.
+Their write-ups of duplicated-mono "dual speaker" mods are what this project
+set out to go beyond: mono mode is that, stereo mode is real left/right.
 
 Built with [Claude Code](https://claude.com/claude-code) against a real
 CMF Phone 1 — every routing claim here came from measurements on the device,
