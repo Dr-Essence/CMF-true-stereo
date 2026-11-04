@@ -39,8 +39,9 @@ nothing.
 
 ## Status
 
-**Current release: v0.9.2** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
-in daily use on the test phone.
+**Current release: v0.9.3** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
+in daily use on the test phone. v0.9.3 makes switching on and off faster and the daemon
+lighter; it has not been on the phone yet.
 
 **Verified on the phone**
 - Stereo: a left-only test file leaves the speaker silent on its right slot and plays on the
@@ -51,6 +52,9 @@ in daily use on the test phone.
 - Hi-res playback (USB Audio Player Pro, Direct 192 kHz) still works in stereo.
 
 **Not tested on a phone yet**
+- v0.9.3: on/off speed and the lighter daemon. Passes the test suite under mksh (Android's
+  shell), dash and busybox; needs a check on the phone: `time su -c stereoctl off`, then
+  `time su -c stereoctl on`, and the earpiece still engaging when audio starts.
 - The boot watchdog removing the stereo overlay after two failed boots (no failed boot has
   happened to trigger it).
 - Re-staging stereo during a module update, and the refusal on a different Nothing OS build
@@ -66,6 +70,13 @@ in daily use on the test phone.
 - `ADDA_DL_MAX_VOL` was tried for a louder earpiece: no clear difference, left out.
 
 **Fixed recently**
+- v0.9.3: every mixer read started tinymix three times and every write five (its style check
+  was cached inside a subshell and thrown away), on every 2 s daemon cycle. It is now detected
+  once per process.
+- v0.9.3: on/off waited on fixed sleeps: up to 2 s for the daemon to notice the stop, 1 s
+  polling for it to exit, and a flat 2 s after restarting it. The daemon now stops the moment
+  it is told to and both waits poll in tenths of a second.
+- v0.9.3: `stereoctl status brief` for the app, without reading every control back.
 - v0.9.2: earpiece gain was 31 (the codec's mute value), not the maximum.
 - v0.9.1: three daemons fought over the mixer; `status` reported "not running".
 - v0.9.0: true stereo: the HAL and Awinic DSP mono folds switched off in stereo mode.

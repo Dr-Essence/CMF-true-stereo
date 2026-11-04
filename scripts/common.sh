@@ -82,28 +82,47 @@ find_tinymix() {
 }
 
 # tinyalsa 2.x uses "tinymix get/set NAME", older builds use "tinymix NAME [val]".
-# Detect once and cache for the life of the process.
 #
 # Detection goes through --help, which 2.x answers even with no sound card
 # present. Do not match on the error text from a bare "tinymix get": 2.x
 # answers that with "no control specified", which reads nothing like a usage
 # message, and guessing "old" from it makes every later write a silent no-op.
-tinymix_style() {
-  [ -n "${TINYMIX_STYLE:-}" ] && { echo "$TINYMIX_STYLE"; return 0; }
+_tinymix_detect() {
   _help=$("$TINYMIX" --help 2>&1)
   _get=$("$TINYMIX" get 2>&1)
   if echo "$_help" | grep -qE 'get[[:space:]]+(NAME|<|\[)'; then
-    TINYMIX_STYLE=new
+    echo new
   elif echo "$_get" | grep -qi 'no control specified'; then
-    TINYMIX_STYLE=new
+    echo new
   elif [ -z "$_help" ] && [ -z "$_get" ]; then
     # Says nothing to either probe: wrong architecture, or not executable.
     # Reporting a style here would turn every later write into a silent no-op.
-    TINYMIX_STYLE=unknown
+    echo unknown
   else
-    TINYMIX_STYLE=old
+    echo old
   fi
-  echo "$TINYMIX_STYLE"
+}
+
+# Finds tinymix and detects its style once, caching both in this shell.
+#
+# Call it in the top-level shell (the daemon and stereoctl do) before any
+# mixer work. The mixer helpers run inside $(...) and pipelines, which are
+# subshells: a cache filled in there is thrown away when they return, which
+# is how every single read used to start tinymix three times and every write
+# five. Filled in the parent, the subshells inherit it.
+#
+# "unknown" is reported but not kept, so a binary that could not run once is
+# tried again on the next call, as before.
+tinymix_ready() {
+  find_tinymix || return 1
+  [ -n "${TINYMIX_STYLE:-}" ] && return 0
+  _st=$(_tinymix_detect)
+  [ "$_st" = unknown ] && return 1
+  TINYMIX_STYLE=$_st
+}
+
+tinymix_style() {
+  if tinymix_ready; then echo "$TINYMIX_STYLE"; else echo unknown; fi
 }
 
 _card_args() {
@@ -132,10 +151,9 @@ ctl_normalize() {
 
 # Raw text as tinymix prints it - useful for showing a user their options.
 ctl_get_raw() {
-  find_tinymix || return 1
-  [ "$(tinymix_style)" = unknown ] && return 1
+  tinymix_ready || return 1
   _out=$(
-    if [ "$(tinymix_style)" = new ]; then
+    if [ "$TINYMIX_STYLE" = new ]; then
       # shellcheck disable=SC2046
       "$TINYMIX" $(_card_args) get "$1" 2>/dev/null
     else
@@ -157,9 +175,8 @@ ctl_get() {
 
 ctl_set() {
   # ctl_set <control name> <value>
-  find_tinymix || return 1
-  [ "$(tinymix_style)" = unknown ] && return 1
-  if [ "$(tinymix_style)" = new ]; then
+  tinymix_ready || return 1
+  if [ "$TINYMIX_STYLE" = new ]; then
     # shellcheck disable=SC2046
     "$TINYMIX" $(_card_args) set "$1" "$2" >/dev/null 2>&1
   else
@@ -409,14 +426,34 @@ daemon_unlock() {
   [ "$(cat "$LOCKDIR/pid" 2>/dev/null)" = "$$" ] && rm -rf "$LOCKDIR"
 }
 
+# A tenth of a second. Toybox and busybox sleep take fractions; a sleep that
+# does not falls back to a whole second rather than spinning.
+tick() {
+  sleep 0.1 2>/dev/null || sleep 1
+}
+
+# sleep that a trapped signal cuts short. A shell runs its trap only after the
+# foreground command returns, so a plain `sleep 2` held a stop request for up
+# to two seconds; `wait` returns as soon as a trapped signal arrives (POSIX).
+# The daemon's stop handler kills the leftover sleep through $NAP_PID.
+nap() {
+  sleep "$1" &
+  NAP_PID=$!
+  wait "$NAP_PID" 2>/dev/null
+  NAP_PID=
+}
+
 # Stop every daemon, however many there are, and wait for them to go.
 stop_daemons() {
   _ps=$(daemon_pids)
   [ -n "$_ps" ] || { rm -rf "$LOCKDIR" "$PIDFILE"; return 1; }
   # shellcheck disable=SC2086
   kill $_ps 2>/dev/null
+  # The daemon handles TERM at once (it naps through `wait`, see nap), so
+  # poll in short ticks: a whole second per check was most of the delay
+  # when the app switched the module on or off.
   _w=0
-  while [ -n "$(daemon_pids)" ] && [ $_w -lt 10 ]; do sleep 1; _w=$((_w + 1)); done
+  while [ -n "$(daemon_pids)" ] && [ $_w -lt 100 ]; do tick; _w=$((_w + 1)); done
   rm -rf "$LOCKDIR" "$PIDFILE"
   return 0
 }
@@ -489,9 +526,8 @@ boot_strike_clear() {
 
 mixer_snapshot() {
   # mixer_snapshot <file>
-  find_tinymix || return 1
-  [ "$(tinymix_style)" = unknown ] && return 1
-  if [ "$(tinymix_style)" = new ]; then
+  tinymix_ready || return 1
+  if [ "$TINYMIX_STYLE" = new ]; then
     "$TINYMIX" contents 2>/dev/null > "$1"
   else
     "$TINYMIX" 2>/dev/null > "$1"

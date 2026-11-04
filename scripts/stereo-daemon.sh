@@ -19,6 +19,7 @@ rotate_log
 # back on the next stream start; README covers running stereo with the
 # daemon off.
 on_stop() {
+  [ -n "${NAP_PID:-}" ] && kill "$NAP_PID" 2>/dev/null
   log info "daemon stopping"
   revert_actions
   stereo_active && amp_set_chsel mono
@@ -30,10 +31,12 @@ trap on_stop TERM INT
 # Wait for boot to finish so the HAL has settled before we touch anything.
 _w=0
 while [ "$(getprop sys.boot_completed)" != 1 ] && [ $_w -lt 120 ]; do
-  sleep 2
+  nap 2
   _w=$((_w + 2))
 done
-sleep "${STARTUP_DELAY:-10}"
+nap "${STARTUP_DELAY:-10}"
+# Once, here in the top-level shell, so every mixer call below inherits it.
+tinymix_ready
 
 if [ "$(action_count)" -eq 0 ]; then
   log info "no actions configured - nothing to do (run 'stereoctl probe' first)"
@@ -64,7 +67,7 @@ while true; do
     # Disabled with the stereo overlay mounted: keep the speaker on the full
     # mix, otherwise it would play the left channel alone.
     stereo_active && playback_active && amp_set_chsel mono
-    sleep "${WATCH_INTERVAL:-2}"
+    nap "${WATCH_INTERVAL:-2}"
     continue
   fi
 
@@ -99,5 +102,5 @@ while true; do
     fi
   fi
 
-  sleep "${WATCH_INTERVAL:-2}"
+  nap "${WATCH_INTERVAL:-2}"
 done

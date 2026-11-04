@@ -418,6 +418,49 @@ check "stale lock taken over" "$(grep -c got "$TMP/locks")" "1"
 stop_daemons
 wait 2>/dev/null
 
+echo "fast stop"
+# The daemon naps through `wait`, so TERM is handled at once, not after the
+# sleep in progress ends.
+cat > "$TMP/fake/scripts/stereo-daemon.sh" <<FAKE
+#!/bin/sh
+MODDIR=$ROOT DATADIR=$DATADIR
+. $ROOT/scripts/common.sh
+trap 'kill "\$NAP_PID" 2>/dev/null; daemon_unlock; exit 0' TERM
+daemon_lock || exit 0
+while :; do nap 30; done
+FAKE
+sh "$TMP/fake/scripts/stereo-daemon.sh" &
+_w=0; until daemon_pid >/dev/null || [ $_w -ge 30 ]; do tick; _w=$((_w + 1)); done
+_t0=$(date +%s)
+stop_daemons
+_t1=$(date +%s)
+check "a napping daemon stops within a second" "$([ $((_t1 - _t0)) -le 1 ] && echo yes || echo no)" "yes"
+check "and is gone" "$(daemon_pids | wc -l | tr -d ' ')" "0"
+check "its sleep is gone too" "$(pgrep -f 'sleep 30' >/dev/null && echo left || echo none)" "none"
+wait 2>/dev/null
+
+echo "tinymix probed once"
+# Detection in the parent shell must carry into the subshells that do the
+# reads and writes; it used to be redone on every call.
+cat > "$TMP/bin/tinymix-count" <<'STUB'
+#!/bin/sh
+echo "$*" >> "$STUBLOG"
+case $1 in
+  --help) echo "usage: tinymix get NAME"; exit 0 ;;
+  get) echo 3; exit 0 ;;
+  set) exit 0 ;;
+esac
+exit 1
+STUB
+chmod +x "$TMP/bin/tinymix-count"
+: > "$STUBLOG"
+TINYMIX="$TMP/bin/tinymix-count"; unset TINYMIX_STYLE; MIXER_CARD=
+tinymix_ready
+_a=$(ctl_get 'A'); _b=$(ctl_get 'B'); ctl_set 'A' 1; echo x | while read -r _; do ctl_get 'C' >/dev/null; done
+check "one style probe for many calls" "$(grep -c '^--help' "$STUBLOG")" "1"
+check "reads still work" "$_a$_b" "33"
+unset TINYMIX TINYMIX_STYLE
+
 echo
 echo "passed $PASS, failed $FAIL"
 [ "$FAIL" -eq 0 ]

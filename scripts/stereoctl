@@ -9,7 +9,8 @@ usage() {
   cat <<'USAGE'
 stereoctl - CMF Phone 1 stereo speaker control
 
-  status              show module, daemon and control state
+  status [brief]      show module, daemon and control state
+                      (brief: without reading every control back)
   doctor              diagnose why the earpiece is silent
   reset               clear saved state and start clean
   probe [dir]         dump the audio hardware to /sdcard (or dir)
@@ -75,6 +76,9 @@ cmd_status() {
   if [ "$_act" = stereo ]; then
     echo "amp slot:  $(amp_chsel)   attenuation: $(ctl_get "$AMP_VOL_CTL" 2>/dev/null)/8 dB (holds ${STEREO_ATTEN_DB:-6} dB)"
   fi
+  # brief: what the app shows, without reading every configured control back
+  # through tinymix (the app polls this after each tap).
+  [ "${1:-}" = brief ] && return 0
   _ov=$(find "$MODDIR/system" -name 'audio_policy_configuration*.xml' 2>/dev/null | wc -l)
   echo "xml overlay: $_ov file(s)"
   if [ "$(action_count)" -gt 0 ]; then
@@ -365,12 +369,22 @@ cmd_channels() {
 cmd_restart() {
   stop_daemons
   STARTUP_DELAY=0 nohup "$MODDIR/scripts/stereo-daemon.sh" >/dev/null 2>&1 &
-  sleep 2
-  if _p=$(daemon_pid); then echo "daemon restarted (pid $_p)"; else echo "daemon did not start - check: stereoctl log"; fi
+  # The daemon takes its lock and writes its pid first thing; wait for that
+  # (up to 3 s) instead of a fixed 2 s.
+  _w=0
+  until _p=$(daemon_pid) || [ $_w -ge 30 ]; do tick; _w=$((_w + 1)); done
+  if [ -n "$_p" ]; then echo "daemon restarted (pid $_p)"; else echo "daemon did not start - check: stereoctl log"; fi
 }
 
+# Detect tinymix once in this shell, so the mixer helpers (which run in
+# subshells) inherit it instead of probing the binary on every read and write.
 case ${1:-status} in
-  status)  cmd_status ;;
+  -h|--help|help|log|edit|channels|probe|report|guard|xml-patch|xml-revert) ;;
+  *) tinymix_ready ;;
+esac
+
+case ${1:-status} in
+  status)  cmd_status "$2" ;;
   probe)   sh "$MODDIR/scripts/probe.sh" "$2" ;;
   report)  cmd_report "$2" ;;
   on)      rm -f "$KILLSWITCH"; echo "armed"; cmd_restart ;;
