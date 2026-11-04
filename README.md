@@ -25,9 +25,17 @@ speaker, the bottom speaker the right — no custom kernel, just root.
 3. Reboot. Hold the phone with the earpiece on your **left**.
 
 Works on the **CMF Phone 1 (A015)**. On any other phone it installs and does
-nothing. Stereo turns off Awinic's speaker protection for media and holds the
-speaker a little quieter instead — use Mono for loud listening. Details in
-[Mono and stereo](#mono-and-stereo).
+nothing.
+
+> **Before you use stereo**
+> - Stereo turns off Awinic's speaker protection for media (calls always keep
+>   it). To make up for it, the speaker is held **6 dB below the amp's full
+>   output** at its loudest (app speaker level 10), and each level down takes
+>   2 dB more, to 24 dB at level 1. Use **Mono** for loud listening.
+> - If the phone fails to boot twice in a row with stereo on, the module
+>   removes stereo on its own and falls back to Mono.
+>
+> Details in [Mono and stereo](#mono-and-stereo).
 
 ## Status
 
@@ -50,6 +58,10 @@ in daily use on the test phone.
 - How the speaker holds up to long, loud stereo listening without Awinic's protection.
 
 **Pending**
+- Which stereo speaker level sounds as loud as stock (Mono, with Awinic's protection): needs a
+  by-ear comparison on the phone, level by level, with the same track.
+- A short clip of the earpiece and speaker splitting a game's or film's audio, for the README
+  and the release page.
 - Check the vendor file hashes after the next Nothing OS update and add the new build.
 - `ADDA_DL_MAX_VOL` was tried for a louder earpiece: no clear difference, left out.
 
