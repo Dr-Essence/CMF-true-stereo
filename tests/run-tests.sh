@@ -461,6 +461,42 @@ check "one style probe for many calls" "$(grep -c '^--help' "$STUBLOG")" "1"
 check "reads still work" "$_a$_b" "33"
 unset TINYMIX TINYMIX_STYLE
 
+echo "stock rebuilt from the stereo files"
+# A stand-in HAL with the stock bytes at the three patched spots, and a
+# stand-in DSP config: patched, then rebuilt, they must hash back to stock.
+K=$TMP/rebuild; mkdir -p "$K/hw" "$K/etc"
+dd if=/dev/zero of="$K/stock.so" bs=1024 count=2600 2>/dev/null
+printf '\377\003\002\321\375\173\004\251' | dd of="$K/stock.so" bs=1 seek=2603040 conv=notrunc 2>/dev/null
+printf '\201\000\000\124' | dd of="$K/stock.so" bs=1 seek=2618068 conv=notrunc 2>/dev/null
+printf '\201\000\000\124' | dd of="$K/stock.so" bs=1 seek=1968640 conv=notrunc 2>/dev/null
+cat > "$K/stock.xml" <<'XML'
+<aurisys_config>
+        <aurisys_scenario aurisys_scenario="AURISYS_SCENARIO_DSP_PLAYBACK_SMARTPA">
+            <downlink_library_name_list digital_gain_lib_name="">
+                <library name="smartpa_awinic"/>
+            </downlink_library_name_list>
+        </aurisys_scenario>
+        <aurisys_scenario aurisys_scenario="AURISYS_SCENARIO_DSP_CALL_FINAL">
+                <library name="smartpa_awinic"/>
+        </aurisys_scenario>
+</aurisys_config>
+XML
+cp "$K/stock.so" "$K/hw/audio.primary.mt6878.so"; _patch_hal "$K/hw/audio.primary.mt6878.so"
+cp "$K/hw/audio.primary.mt6878.so" "$K/hw/audio.primary.mediatek.so"
+_patch_aurisys "$K/stock.xml" "$K/etc/aurisys_config_rv.xml"
+_OHAL_DIR=$HAL_DIR; _OAUR=$AUR; _OHS=$HAL_STOCK; _OHX=$HAL_STEREO; _OAS=$AUR_STOCK; _OAX=$AUR_STEREO; _OLR=$LIVE_ROOT; _OSD=$STOCKDIR
+HAL_DIR=$K/hw; AUR=$K/etc/aurisys_config_rv.xml; LIVE_ROOT=; STOCKDIR=$K/stockcopy
+HAL_STOCK=$(_sha "$K/stock.so"); HAL_STEREO=$(_sha "$HAL_DIR/audio.primary.mt6878.so")
+AUR_STOCK=$(_sha "$K/stock.xml"); AUR_STEREO=$(_sha "$AUR")
+check "the patch changes the HAL" "$([ "$HAL_STOCK" != "$HAL_STEREO" ] && echo yes)" "yes"
+check "rebuilt from a stereo boot" "$(save_stock && echo ok)" "ok"
+check "HAL back to the stock hash" "$(_sha "$STOCKDIR/audio.primary.mediatek.so")" "$HAL_STOCK"
+check "DSP config back to the stock hash" "$(_sha "$STOCKDIR/aurisys_config_rv.xml")" "$AUR_STOCK"
+check "calls keep smartpa_awinic" "$(grep -c smartpa_awinic "$STOCKDIR/aurisys_config_rv.xml")" "2"
+echo junk > "$HAL_DIR/audio.primary.mt6878.so"; rm -f "$STOCKDIR/audio.primary.mt6878.so"
+check "unknown file: no copy kept" "$(save_stock || echo refused; [ -f "$STOCKDIR/audio.primary.mt6878.so" ] && echo kept)" "refused"
+HAL_DIR=$_OHAL_DIR; AUR=$_OAUR; HAL_STOCK=$_OHS; HAL_STEREO=$_OHX; AUR_STOCK=$_OAS; AUR_STEREO=$_OAX; LIVE_ROOT=$_OLR; STOCKDIR=$_OSD
+
 echo "live switching"
 # Real bind mounts over fake vendor files; getprop/setprop/dumpsys stand in for
 # init's audio HAL service. Needs root (mount): skipped when not available.

@@ -340,8 +340,8 @@ cmd_channels() {
       echo "staged:  $_stg$( [ "$_act" != "$_stg" ] && echo '   (reboot to apply)')"
       ;;
     stereo)
-      # Mono is running: keep a copy of its stock files for switching back live.
-      stereo_active || save_stock
+      # Keep a checked copy of the stock files for switching back live.
+      save_stock
       if _why=$(stage_stereo); then
         sed -i 's/^CHANNELS=.*/CHANNELS=stereo/' "$CONF" 2>/dev/null
         grep -q '^CHANNELS=' "$CONF" || echo 'CHANNELS=stereo' >> "$CONF"
@@ -367,6 +367,8 @@ cmd_channels() {
       fi
       ;;
     mono)
+      # Booted stereo: rebuild the stock files from the stereo ones (checked).
+      stereo_active && save_stock
       unstage_stereo
       sed -i 's/^CHANNELS=.*/CHANNELS=mono/' "$CONF" 2>/dev/null
       if ! stereo_active; then

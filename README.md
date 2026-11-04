@@ -60,6 +60,9 @@ Stereo without a reboot and stops the daemon flooding the kernel log.
   and back, each with the left-only test file, `stereoctl status` showing the right channels,
   and `stereoctl log` showing "live stereo: applied". Also unproven there: `nsenter` reaching
   init's mount namespace (if it cannot, the switch is refused and waits for a reboot).
+  On the phone so far: from a stereo boot, `channels mono` was refused safely ("no verified
+  mono copy") with the first v0.9.4 build; the stock copy is now rebuilt from the stereo files
+  (checked against the real files: exact stock hashes), so that case should switch live.
 - v0.9.4: the amp attenuation check at playback start and every 10th cycle instead of every
   cycle (simulated: 3 checks in 25 cycles instead of 25). Needs `dmesg | grep -c aw882xx_volume_get`
   to stay low while the earpiece and speaker still play at the set levels.
@@ -89,6 +92,8 @@ Stereo without a reboot and stops the daemon flooding the kernel log.
 
 **Fixed recently**
 - v0.9.4: switching Mono and Stereo needed a reboot; it now restarts only the audio HAL.
+  From a stereo boot, the stock files are rebuilt from the stereo ones (original bytes back,
+  then hash-checked), so mono can be switched to live without ever having booted mono.
 - v0.9.4: the daemon read the amp's volume every cycle, and the Awinic driver logs each read,
   so dmesg filled with `aw882xx_volume_get` lines (about 20 a minute) and lost the boot
   messages.
@@ -282,7 +287,9 @@ rebooting: about a second of silence, players pause, calls are unaffected
 (measured on the CMF Phone 1). The boot-time overlay belongs to the root manager
 and cannot be taken back file by file, so a live switch mounts on top of it, in
 init's mount namespace where the HAL runs: the staged stereo files, or a copy of
-the phone's own stock files, saved and hash-checked while it ran mono. Every
+the phone's own stock files: copied when it booted mono, or rebuilt from the
+stereo files by putting the original bytes back, and kept only when it hashes to
+the stock build. Every
 file is read back through `/proc/1/root` and must hash to the expected build;
 the new HAL process must still be running 3 s later. If any check fails, or a
 call is active, the mounts are undone and the change waits for a reboot.

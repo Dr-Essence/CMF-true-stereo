@@ -60,6 +60,25 @@ _patch_hal() {
   printf '\037\040\003\325' | dd of="$1" bs=1 seek=1968640 conv=notrunc 2>/dev/null
 }
 
+# The reverse of _patch_hal: the stock bytes at the same three spots. Verified:
+# applied to the stereo build it gives back the stock build's exact hash.
+_unpatch_hal() {
+  printf '\377\003\002\321\375\173\004\251' | dd of="$1" bs=1 seek=2603040 conv=notrunc 2>/dev/null &&
+  printf '\201\000\000\124' | dd of="$1" bs=1 seek=2618068 conv=notrunc 2>/dev/null &&
+  printf '\201\000\000\124' | dd of="$1" bs=1 seek=1968640 conv=notrunc 2>/dev/null
+}
+
+# The reverse of _patch_aurisys (marker line out, smartpa_awinic back).
+_unpatch_aurisys() {
+  awk -v mark="$AUR_MARK" '
+    index($0, "<!-- " mark " ") { next }
+    /aurisys_scenario="AURISYS_SCENARIO_DSP_PLAYBACK_SMARTPA"/ { inscn=1 }
+    inscn && /<library name="aurisys_demo"\/>/ { sub(/aurisys_demo/, "smartpa_awinic"); inscn=0 }
+    /<\/aurisys_scenario>/ { inscn=0 }
+    { print }
+  ' "$1" > "$2"
+}
+
 _patch_aurisys() {
   # One library name, in one scenario, plus a marker comment.
   awk -v mark="$AUR_MARK" '
@@ -177,19 +196,32 @@ _global() {
   fi
 }
 
-# Copy the phone's own stock files, once, for switching back to mono live.
+# Keep a copy of the phone's own stock files, for switching back to mono live.
+# From a mono boot they are copied; from a stereo boot they are rebuilt from
+# the stereo files by putting the original bytes back. Either way a copy is
+# kept only when it hashes to the analysed stock build.
 save_stock() {
   mkdir -p "$STOCKDIR" || return 1
   for _n in $HAL_NAMES aurisys_config_rv.xml; do
     case $_n in
-      aurisys_config_rv.xml) _src=$AUR; _x=$AUR_STOCK ;;
-      *) _src=$HAL_DIR/$_n; _x=$HAL_STOCK ;;
+      aurisys_config_rv.xml) _src=$(_view "$AUR"); _x=$AUR_STOCK; _y=$AUR_STEREO ;;
+      *) _src=$(_view "$HAL_DIR/$_n"); _x=$HAL_STOCK; _y=$HAL_STEREO ;;
     esac
-    [ "$(_sha "$STOCKDIR/$_n")" = "$_x" ] && continue
-    [ "$(_sha "$(_view "$_src")")" = "$_x" ] || return 1
-    cp -f "$(_view "$_src")" "$STOCKDIR/$_n.tmp" && mv -f "$STOCKDIR/$_n.tmp" "$STOCKDIR/$_n" || return 1
-    chmod 0644 "$STOCKDIR/$_n"
-    chcon "$(ls -Z "$(_view "$_src")" | awk '{print $1}')" "$STOCKDIR/$_n" 2>/dev/null
+    _t=$STOCKDIR/$_n
+    [ "$(_sha "$_t")" = "$_x" ] && continue
+    case $(_sha "$_src") in
+      "$_x") cp -f "$_src" "$_t.tmp" || return 1 ;;
+      "$_y")
+        case $_n in
+          aurisys_config_rv.xml) _unpatch_aurisys "$_src" "$_t.tmp" || return 1 ;;
+          *) cp -f "$_src" "$_t.tmp" && _unpatch_hal "$_t.tmp" || return 1 ;;
+        esac ;;
+      *) return 1 ;;
+    esac
+    [ "$(_sha "$_t.tmp")" = "$_x" ] || { rm -f "$_t.tmp"; return 1; }
+    mv -f "$_t.tmp" "$_t"
+    chmod 0644 "$_t"
+    chcon "$(ls -Z "$_src" | awk '{print $1}')" "$_t" 2>/dev/null
   done
   return 0
 }
