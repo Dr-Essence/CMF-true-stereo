@@ -671,9 +671,11 @@ Layout:
 
 ## Credits and licence
 
-The module is © 2026 Dr.Essence under the [0BSD licence](LICENSE): use,
-copy, change and share it for any purpose, no conditions. Attribution is
-welcome, not required.
+The module is © 2026 Dr.Essence under [CC BY-NC-SA 4.0](LICENSE): use, copy,
+change and share it, as long as you credit Dr.Essence, do not use it
+commercially (including selling it or anything built from it), and share
+changed versions under the same licence. Releases up to v0.9.6 were published
+under 0BSD; copies obtained under it keep those terms.
 
 `bin/tinymix` is a statically linked `aarch64` build of
 [tinyalsa](https://github.com/tinyalsa/tinyalsa), BSD-3-Clause. Its licence,
