@@ -61,14 +61,16 @@ in daily use on the test phone. Mono and Stereo switch without a reboot. **Next:
 - Hi-res playback (USB Audio Player Pro, Direct 192 kHz) still works in stereo.
 
 **Not tested on a phone yet**
-- v0.9.5 orientation swap. Checked: the patch runs in an ARM64 emulator against test buffers
-  (13 cases: 16/32-bit swapped at 270; untouched at 0/90, for any route but the speaker alone,
-  other formats, empty buffers; the rotation stored as Android sends it); the patched HAL
-  disassembles as intended; the hash is the same from dash, mksh and busybox, and from
-  converting the v0.9.4 stereo HAL. Needs on the phone: `stereoctl channels stereo` (switches
-  the running HAL live), then the left-only test file with the earpiece on your left (earpiece
-  plays) and on your right (speaker plays), and `getprop vendor.audiohal.cmf_rotation`
-  following the turns.
+- v0.9.5 orientation swap. On the phone so far: the first build swapped VLC (deep-buffer
+  output) correctly but not USB Audio Player Pro (primary output); diagnostic builds showed our
+  swap ran on UAPP's buffers too, and that Nothing's Dirac (attached to the primary output in
+  every dump) already swaps that output with the rotation, so the two cancelled. The patch now
+  leaves the primary output to Dirac. Checked: 16 emulator cases (primary untouched; deep
+  buffer and fast swapped; 16/32-bit; 0/90/270; other routes and formats untouched), the
+  patched HAL disassembles as intended, same hash from dash, mksh and busybox. Needs on the
+  phone: the left-only file in UAPP and in VLC, earpiece on your left (earpiece plays) and on
+  your right (speaker plays). Known limit: with Dirac switched off, apps on the primary output
+  are not swapped (nothing is swapping them then).
 - Live switching from the app's Mono/Stereo buttons (needs the next app build).
 - v0.9.3: on/off speed and the lighter daemon. Passes the test suite under mksh (Android's
   shell), dash and busybox; needs a check on the phone: `time su -c stereoctl off`, then
@@ -354,7 +356,9 @@ the new build has been checked.
   the HAL under the phone's own SELinux rules) and, for the speaker-only route
   in 16- or 32-bit PCM (the cases MediaTek's fold handled), swaps the two
   channels of every buffer while it reads 270. Headphones and every other
-  route are never touched. The code is `hal-swap/patch.S`; `hal-swap/run.sh`
+  route are never touched, and neither is the primary output: Nothing's Dirac
+  sits there and already swaps it with the rotation (measured), so swapping it
+  again would cancel Dirac's. The code is `hal-swap/patch.S`; `hal-swap/run.sh`
   assembles it, runs it in an ARM64 emulator against test buffers, and checks
   the module carries exactly those bytes.
 

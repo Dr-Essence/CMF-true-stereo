@@ -6,6 +6,12 @@
 //   - the stream goes to the speaker alone (devices vector at
 //     [[this+0x20]+0x1d8] is exactly { AUDIO_DEVICE_OUT_SPEAKER = 0x2 }:
 //     the same check MediaTek's fold made; headphones are never swapped),
+//   - it is not the primary output (output flags at [[this+0x20]+0xc], the
+//     value MediaTek's own write() log prints, without AUDIO_OUTPUT_FLAG_
+//     PRIMARY = 0x2). Nothing's Dirac sits on the primary output and already
+//     swaps it with the rotation (measured: our swap on top cancelled it;
+//     with ours off, Dirac alone moved the sound); every other output (deep
+//     buffer, fast) has no Dirac and is swapped here,
 //   - the format at [[this+0x20]] is PCM_16_BIT (1) or PCM_32_BIT (3), the
 //     two MediaTek's fold handled,
 //   - vendor.audiohal.cmf_rotation reads 270 (earpiece on the right,
@@ -34,6 +40,8 @@ swapfn:
         ldr     w11, [x9]
         cmp     w11, #2
         b.ne    9f
+        ldr     w11, [x8, #0xc]
+        tbnz    w11, #1, 9f
         adr     x0, key
         mov     w1, wzr
         bl      PGI

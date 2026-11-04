@@ -35,7 +35,7 @@
 HAL_NAMES="audio.primary.mt6878.so audio.primary.mediatek.so"
 HAL_DIR=/vendor/lib64/hw
 HAL_STOCK=28db2e24e9d4c4f88a67a7631ab581fa064bb03a47a87314b7599a2cb757a324
-HAL_STEREO=8521fadc4ccb85e3a7f1f001519818f6ece720b22faa03f090826546c43b05dc
+HAL_STEREO=58a5755e0203183ad7fa541528305a3040f204e503528ad9182f4118fe1368d9
 # v0.9.0-v0.9.4 stereo (no orientation swap): converted on the next staging.
 HAL_STEREO_V1=2615f6e28e40a0520f6122e03513f374294e011fa3c654801e898f5ea62a5edf
 
@@ -52,20 +52,21 @@ OV_ETC=$MODDIR/system/vendor/etc
 
 _sha() { sha256sum "$1" 2>/dev/null | cut -d' ' -f1; }
 
-# Patch a stock HAL copy in place (222 bytes in four spots):
+# Patch a stock HAL copy in place (229 bytes in four spots):
 #   0x27b820 doStereoToMonoConversionIfNeed: replaced by the orientation swap
-#            and the rotation store (hal-swap/patch.S, 236 bytes, assembled
+#            and the rotation store (hal-swap/patch.S, 244 bytes, assembled
 #            and tested in an ARM64 emulator: hal-swap/run.sh); swaps left and
 #            right for the speaker-only route when the phone is turned with
-#            the earpiece on the right (Android's rotation=270), else nothing
+#            the earpiece on the right (Android's rotation=270), except on the
+#            primary output, where Nothing's Dirac already swaps it
 #   0x2587c0 setParameters, "rotation" key: b to the rotation store, which
 #            keeps the value in vendor.audiohal.cmf_rotation (the stock HAL
 #            only drops it) and returns
 #   0x27f2d4 InitArsiTaskConfig         b.ne -> nop (always set hw_info 0x4)
 #   0x1e0a00 SetArsiTaskConfig          b.ne -> nop (same, DSP stream manager)
-HAL_SWAP_BODY='\375\173\275\251\375\003\000\221\363\123\001\251\365\023\000\371\363\003\000\252\364\003\001\252\365\003\002\252\150\022\100\371\050\004\000\264\011\251\135\251\113\001\011\313\177\021\000\361\241\003\000\124\053\001\100\271\177\011\000\161\101\003\000\124\140\004\000\020\341\003\037\052\342\213\003\224\037\070\004\161\241\002\000\124\150\022\100\371\010\001\100\271\037\015\000\161\140\001\000\124\037\005\000\161\341\001\000\124\251\376\102\323\251\001\000\264\212\002\100\271\112\101\212\023\212\106\000\270\051\005\000\361\201\377\377\124\007\000\000\024\251\376\103\323\251\000\000\264\212\056\100\051\213\052\201\050\051\005\000\361\241\377\377\124\340\003\037\052\365\023\100\371\363\123\101\251\375\173\303\250\300\003\137\326\341\343\101\371\200\000\000\020\370\235\003\224\001\010\000\320\267\163\377\027\166\145\156\144\157\162\056\141\165\144\151\157\150\141\154\056\143\155\146\137\162\157\164\141\164\151\157\156\000\000\000\000'
+HAL_SWAP_BODY='\375\173\275\251\375\003\000\221\363\123\001\251\365\023\000\371\363\003\000\252\364\003\001\252\365\003\002\252\150\022\100\371\150\004\000\264\011\251\135\251\113\001\011\313\177\021\000\361\341\003\000\124\053\001\100\271\177\011\000\161\201\003\000\124\013\015\100\271\113\003\010\067\140\004\000\020\341\003\037\052\340\213\003\224\037\070\004\161\241\002\000\124\150\022\100\371\010\001\100\271\037\015\000\161\140\001\000\124\037\005\000\161\341\001\000\124\251\376\102\323\251\001\000\264\212\002\100\271\112\101\212\023\212\106\000\270\051\005\000\361\201\377\377\124\007\000\000\024\251\376\103\323\251\000\000\264\212\056\100\051\213\052\201\050\051\005\000\361\241\377\377\124\340\003\037\052\365\023\100\371\363\123\101\251\375\173\303\250\300\003\137\326\341\343\101\371\200\000\000\020\366\235\003\224\001\010\000\320\265\163\377\027\166\145\156\144\157\162\056\141\165\144\151\157\150\141\154\056\143\155\146\137\162\157\164\141\164\151\157\156\000\000\000\000'
 # b rotcave, written at 0x2587c0 (rotcave sits inside the body above).
-HAL_SWAP_B='\106\214\000\024'
+HAL_SWAP_B='\110\214\000\024'
 _patch_hal() {
   printf "$HAL_SWAP_BODY" | dd of="$1" bs=1 seek=2603040 conv=notrunc 2>/dev/null &&
   printf "$HAL_SWAP_B" | dd of="$1" bs=1 seek=2459584 conv=notrunc 2>/dev/null &&
