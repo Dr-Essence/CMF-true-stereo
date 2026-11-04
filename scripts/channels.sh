@@ -64,9 +64,11 @@ _sha() { sha256sum "$1" 2>/dev/null | cut -d' ' -f1; }
 #   0x27f2d4 InitArsiTaskConfig         b.ne -> nop (always set hw_info 0x4)
 #   0x1e0a00 SetArsiTaskConfig          b.ne -> nop (same, DSP stream manager)
 HAL_SWAP_BODY='\375\173\275\251\375\003\000\221\363\123\001\251\365\023\000\371\363\003\000\252\364\003\001\252\365\003\002\252\150\022\100\371\050\004\000\264\011\251\135\251\113\001\011\313\177\021\000\361\241\003\000\124\053\001\100\271\177\011\000\161\101\003\000\124\140\004\000\020\341\003\037\052\342\213\003\224\037\070\004\161\241\002\000\124\150\022\100\371\010\001\100\271\037\015\000\161\140\001\000\124\037\005\000\161\341\001\000\124\251\376\102\323\251\001\000\264\212\002\100\271\112\101\212\023\212\106\000\270\051\005\000\361\201\377\377\124\007\000\000\024\251\376\103\323\251\000\000\264\212\056\100\051\213\052\201\050\051\005\000\361\241\377\377\124\340\003\037\052\365\023\100\371\363\123\101\251\375\173\303\250\300\003\137\326\341\343\101\371\200\000\000\020\370\235\003\224\001\010\000\320\267\163\377\027\166\145\156\144\157\162\056\141\165\144\151\157\150\141\154\056\143\155\146\137\162\157\164\141\164\151\157\156\000\000\000\000'
+# b rotcave, written at 0x2587c0 (rotcave sits inside the body above).
+HAL_SWAP_B='\106\214\000\024'
 _patch_hal() {
   printf "$HAL_SWAP_BODY" | dd of="$1" bs=1 seek=2603040 conv=notrunc 2>/dev/null &&
-  printf '\106\214\000\024' | dd of="$1" bs=1 seek=2459584 conv=notrunc 2>/dev/null &&
+  printf "$HAL_SWAP_B" | dd of="$1" bs=1 seek=2459584 conv=notrunc 2>/dev/null &&
   printf '\037\040\003\325' | dd of="$1" bs=1 seek=2618068 conv=notrunc 2>/dev/null &&
   printf '\037\040\003\325' | dd of="$1" bs=1 seek=1968640 conv=notrunc 2>/dev/null
 }
@@ -127,6 +129,9 @@ stage_stereo() {
   for _n in $HAL_NAMES; do
     _src=$HAL_DIR/$_n
     [ -f "$_src" ] || { _fail="$_src missing - not a CMF Phone 1 audio stack"; break; }
+    # A checked stock copy is the best source: it patches into this build from
+    # whatever stereo build is running now.
+    [ "$(_sha "$STOCKDIR/$_n")" = "$HAL_STOCK" ] && _src=$STOCKDIR/$_n
     _h=$(_sha "$_src")
     cp -f "$_src" "$_tmp/$_n" || { _fail="cannot copy $_src"; break; }
     case $_h in

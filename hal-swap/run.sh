@@ -24,3 +24,14 @@ if cmp -s "$T/patch.bin" "$T/module.bin"; then
 else
   echo "  FAIL - channels.sh bytes differ from patch.S"; exit 1
 fi
+[ "$(wc -c < "$T/patch.bin")" -le 512 ] || { echo "  FAIL - patch overruns the 512-byte function"; exit 1; }
+# The branch at 0x2587c0 must land on rotcave as assembled.
+_rot=$(llvm-nm "$T/patch.elf" | awk '$3 == "rotcave" { print $1 }')
+_ins=$(( 0x14000000 | (((0x$_rot - 0x2587c0) / 4) & 0x3ffffff) ))
+_want=$(printf '\\%03o\\%03o\\%03o\\%03o' $((_ins & 255)) $((_ins >> 8 & 255)) $((_ins >> 16 & 255)) $((_ins >> 24 & 255)))
+_b=$(sed -n "s/^HAL_SWAP_B='\(.*\)'$/\1/p" ../scripts/channels.sh)
+if [ "$_b" = "$_want" ]; then
+  echo "  ok   - the setParameters branch lands on rotcave (0x$_rot)"
+else
+  echo "  FAIL - HAL_SWAP_B is $_b, rotcave needs $_want"; exit 1
+fi
