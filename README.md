@@ -29,6 +29,35 @@ nothing. Stereo turns off Awinic's speaker protection for media and holds the
 speaker a little quieter instead — use Mono for loud listening. Details in
 [Mono and stereo](#mono-and-stereo).
 
+## Status
+
+**Current release: v0.9.2** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
+in daily use on the test phone.
+
+**Verified on the phone**
+- Stereo: a left-only test file leaves the speaker silent on its right slot and plays on the
+  earpiece, with Nothing's Dirac tuning on and off.
+- Mono and stereo switching through `stereoctl channels` and the app, with a reboot.
+- One daemon per boot (three were starting before v0.9.1).
+- Earpiece at +8 dB (`Handset Volume 0`) while playing; the old 31 is corrected on install.
+- Hi-res playback (USB Audio Player Pro, Direct 192 kHz) still works in stereo.
+
+**Not tested on a phone yet**
+- The boot watchdog removing the stereo overlay after two failed boots (no failed boot has
+  happened to trigger it).
+- Re-staging stereo during a module update, and the refusal on a different Nothing OS build
+  (needs the next OTA).
+- How the speaker holds up to long, loud stereo listening without Awinic's protection.
+
+**Pending**
+- Check the vendor file hashes after the next Nothing OS update and add the new build.
+- `ADDA_DL_MAX_VOL` was tried for a louder earpiece: no clear difference, left out.
+
+**Fixed recently**
+- v0.9.2: earpiece gain was 31 (the codec's mute value), not the maximum.
+- v0.9.1: three daemons fought over the mixer; `status` reported "not running".
+- v0.9.0: true stereo: the HAL and Awinic DSP mono folds switched off in stereo mode.
+
 ---
 
 ## About
