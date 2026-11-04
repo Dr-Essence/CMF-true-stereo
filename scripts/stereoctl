@@ -345,10 +345,9 @@ cmd_channels() {
       if _why=$(stage_stereo); then
         sed -i 's/^CHANNELS=.*/CHANNELS=stereo/' "$CONF" 2>/dev/null
         grep -q '^CHANNELS=' "$CONF" || echo 'CHANNELS=stereo' >> "$CONF"
-        if stereo_active; then
-          echo "stereo (already running)"
-        elif _w=$(live_switch stereo); then
-          echo "stereo applied now (audio restarted - press play again)"
+        if _w=$(live_switch stereo); then
+          if [ "$_w" = unchanged ]; then echo "stereo (already running)"
+          else echo "stereo applied now (audio restarted - press play again)"; fi
         else
           echo "stereo staged. Reboot to apply ($_w)."
         fi
@@ -359,8 +358,8 @@ cmd_channels() {
         echo "  Back off at the first sign of distortion, and use"
         echo "  'stereoctl channels mono' for loud listening."
         echo
-        echo "  Hold the phone with the earpiece on your LEFT (rotate it"
-        echo "  counter-clockwise) for the image to be the right way round."
+        echo "  Turned the other way (earpiece on your right), left and right"
+        echo "  swap with the screen, so the image stays the right way round."
       else
         echo "stereo NOT staged: $_why"
         return 1
@@ -371,13 +370,15 @@ cmd_channels() {
       stereo_active && save_stock
       unstage_stereo
       sed -i 's/^CHANNELS=.*/CHANNELS=mono/' "$CONF" 2>/dev/null
-      if ! stereo_active; then
-        echo "mono (already running)"
-      elif _w=$(live_switch mono); then
-        # The amp's own gain and slot back, as at a mono boot.
-        amp_release_atten
-        amp_set_chsel left
-        echo "mono applied now (audio restarted - press play again)"
+      if _w=$(live_switch mono); then
+        if [ "$_w" = unchanged ]; then
+          echo "mono (already running)"
+        else
+          # The amp's own gain and slot back, as at a mono boot.
+          amp_release_atten
+          amp_set_chsel left
+          echo "mono applied now (audio restarted - press play again)"
+        fi
       else
         echo "mono staged. Reboot to apply ($_w)."
       fi

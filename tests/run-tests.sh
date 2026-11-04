@@ -481,21 +481,31 @@ cat > "$K/stock.xml" <<'XML'
         </aurisys_scenario>
 </aurisys_config>
 XML
-cp "$K/stock.so" "$K/hw/audio.primary.mt6878.so"; _patch_hal "$K/hw/audio.primary.mt6878.so"
+# The earlier (v0.9.0-v0.9.4) stereo build: 16 bytes in three spots.
+cp "$K/stock.so" "$K/hw/audio.primary.mt6878.so"
+printf '\340\003\037\052\300\003\137\326' | dd of="$K/hw/audio.primary.mt6878.so" bs=1 seek=2603040 conv=notrunc 2>/dev/null
+printf '\037\040\003\325' | dd of="$K/hw/audio.primary.mt6878.so" bs=1 seek=2618068 conv=notrunc 2>/dev/null
+printf '\037\040\003\325' | dd of="$K/hw/audio.primary.mt6878.so" bs=1 seek=1968640 conv=notrunc 2>/dev/null
 cp "$K/hw/audio.primary.mt6878.so" "$K/hw/audio.primary.mediatek.so"
 _patch_aurisys "$K/stock.xml" "$K/etc/aurisys_config_rv.xml"
-_OHAL_DIR=$HAL_DIR; _OAUR=$AUR; _OHS=$HAL_STOCK; _OHX=$HAL_STEREO; _OAS=$AUR_STOCK; _OAX=$AUR_STEREO; _OLR=$LIVE_ROOT; _OSD=$STOCKDIR
+_OHAL_DIR=$HAL_DIR; _OAUR=$AUR; _OHS=$HAL_STOCK; _OHX=$HAL_STEREO; _OHV1=$HAL_STEREO_V1; _OAS=$AUR_STOCK; _OAX=$AUR_STEREO; _OLR=$LIVE_ROOT; _OSD=$STOCKDIR
 HAL_DIR=$K/hw; AUR=$K/etc/aurisys_config_rv.xml; LIVE_ROOT=; STOCKDIR=$K/stockcopy
-HAL_STOCK=$(_sha "$K/stock.so"); HAL_STEREO=$(_sha "$HAL_DIR/audio.primary.mt6878.so")
+HAL_STOCK=$(_sha "$K/stock.so"); HAL_STEREO_V1=$(_sha "$HAL_DIR/audio.primary.mt6878.so")
+cp "$K/stock.so" "$K/cur.so"; _patch_hal "$K/cur.so"; HAL_STEREO=$(_sha "$K/cur.so")
 AUR_STOCK=$(_sha "$K/stock.xml"); AUR_STEREO=$(_sha "$AUR")
 check "the patch changes the HAL" "$([ "$HAL_STOCK" != "$HAL_STEREO" ] && echo yes)" "yes"
-check "rebuilt from a stereo boot" "$(save_stock && echo ok)" "ok"
+cp "$K/cur.so" "$K/conv.so"; cp "$HAL_DIR/audio.primary.mt6878.so" "$K/conv.so"
+check "earlier stereo converts to the current one" "$(_unpatch_hal_v1 "$K/conv.so" && _patch_hal "$K/conv.so" && _sha "$K/conv.so")" "$HAL_STEREO"
+check "rebuilt from an earlier-stereo boot" "$(save_stock && echo ok)" "ok"
 check "HAL back to the stock hash" "$(_sha "$STOCKDIR/audio.primary.mediatek.so")" "$HAL_STOCK"
 check "DSP config back to the stock hash" "$(_sha "$STOCKDIR/aurisys_config_rv.xml")" "$AUR_STOCK"
 check "calls keep smartpa_awinic" "$(grep -c smartpa_awinic "$STOCKDIR/aurisys_config_rv.xml")" "2"
-echo junk > "$HAL_DIR/audio.primary.mt6878.so"; rm -f "$STOCKDIR/audio.primary.mt6878.so"
+# The current stereo build is undone from the stock copy, never by guessing.
+cp "$K/cur.so" "$HAL_DIR/audio.primary.mt6878.so"; rm -f "$STOCKDIR/audio.primary.mt6878.so"
+check "current stereo, no stock copy: no copy kept" "$(save_stock || echo refused; [ -f "$STOCKDIR/audio.primary.mt6878.so" ] && echo kept)" "refused"
+echo junk > "$HAL_DIR/audio.primary.mt6878.so"
 check "unknown file: no copy kept" "$(save_stock || echo refused; [ -f "$STOCKDIR/audio.primary.mt6878.so" ] && echo kept)" "refused"
-HAL_DIR=$_OHAL_DIR; AUR=$_OAUR; HAL_STOCK=$_OHS; HAL_STEREO=$_OHX; AUR_STOCK=$_OAS; AUR_STEREO=$_OAX; LIVE_ROOT=$_OLR; STOCKDIR=$_OSD
+HAL_DIR=$_OHAL_DIR; AUR=$_OAUR; HAL_STOCK=$_OHS; HAL_STEREO=$_OHX; HAL_STEREO_V1=$_OHV1; AUR_STOCK=$_OAS; AUR_STEREO=$_OAX; LIVE_ROOT=$_OLR; STOCKDIR=$_OSD
 
 echo "live switching"
 # Real bind mounts over fake vendor files; getprop/setprop/dumpsys stand in for
@@ -603,6 +613,14 @@ STUB
   tick() { sleep 0.1 2>/dev/null || sleep 1; }
 else
   echo "  skip - bind mounts need root"
+fi
+
+echo "orientation swap (ARM64 emulator)"
+if _out=$(sh "$ROOT/hal-swap/run.sh" 2>&1); then
+  case $_out in *"skip -"*) echo "$_out" ;; *) ok "patch.S runs and checks out in qemu, bytes match channels.sh" ;; esac
+else
+  echo "$_out" | grep FAIL
+  bad "orientation swap patch"
 fi
 
 echo

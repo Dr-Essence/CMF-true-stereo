@@ -35,7 +35,9 @@
 HAL_NAMES="audio.primary.mt6878.so audio.primary.mediatek.so"
 HAL_DIR=/vendor/lib64/hw
 HAL_STOCK=28db2e24e9d4c4f88a67a7631ab581fa064bb03a47a87314b7599a2cb757a324
-HAL_STEREO=2615f6e28e40a0520f6122e03513f374294e011fa3c654801e898f5ea62a5edf
+HAL_STEREO=8521fadc4ccb85e3a7f1f001519818f6ece720b22faa03f090826546c43b05dc
+# v0.9.0-v0.9.4 stereo (no orientation swap): converted on the next staging.
+HAL_STEREO_V1=2615f6e28e40a0520f6122e03513f374294e011fa3c654801e898f5ea62a5edf
 
 AUR=/vendor/etc/aurisys_config_rv.xml
 AUR_STOCK=f5818d29d40ce6a5e18765af96ab72a00db8c816e5a0c308c8003eff6e65f2cc
@@ -50,19 +52,29 @@ OV_ETC=$MODDIR/system/vendor/etc
 
 _sha() { sha256sum "$1" 2>/dev/null | cut -d' ' -f1; }
 
-# Patch a stock HAL copy in place: three spots, 16 bytes.
-#   0x27b820 doStereoToMonoConversionIfNeed: mov w0, wzr ; ret
+# Patch a stock HAL copy in place (222 bytes in four spots):
+#   0x27b820 doStereoToMonoConversionIfNeed: replaced by the orientation swap
+#            and the rotation store (hal-swap/patch.S, 236 bytes, assembled
+#            and tested in an ARM64 emulator: hal-swap/run.sh); swaps left and
+#            right for the speaker-only route when the phone is turned with
+#            the earpiece on the right (Android's rotation=270), else nothing
+#   0x2587c0 setParameters, "rotation" key: b to the rotation store, which
+#            keeps the value in vendor.audiohal.cmf_rotation (the stock HAL
+#            only drops it) and returns
 #   0x27f2d4 InitArsiTaskConfig         b.ne -> nop (always set hw_info 0x4)
 #   0x1e0a00 SetArsiTaskConfig          b.ne -> nop (same, DSP stream manager)
+HAL_SWAP_BODY='\375\173\275\251\375\003\000\221\363\123\001\251\365\023\000\371\363\003\000\252\364\003\001\252\365\003\002\252\150\022\100\371\050\004\000\264\011\251\135\251\113\001\011\313\177\021\000\361\241\003\000\124\053\001\100\271\177\011\000\161\101\003\000\124\140\004\000\020\341\003\037\052\342\213\003\224\037\070\004\161\241\002\000\124\150\022\100\371\010\001\100\271\037\015\000\161\140\001\000\124\037\005\000\161\341\001\000\124\251\376\102\323\251\001\000\264\212\002\100\271\112\101\212\023\212\106\000\270\051\005\000\361\201\377\377\124\007\000\000\024\251\376\103\323\251\000\000\264\212\056\100\051\213\052\201\050\051\005\000\361\241\377\377\124\340\003\037\052\365\023\100\371\363\123\101\251\375\173\303\250\300\003\137\326\341\343\101\371\200\000\000\020\370\235\003\224\001\010\000\320\267\163\377\027\166\145\156\144\157\162\056\141\165\144\151\157\150\141\154\056\143\155\146\137\162\157\164\141\164\151\157\156\000\000\000\000'
 _patch_hal() {
-  printf '\340\003\037\052\300\003\137\326' | dd of="$1" bs=1 seek=2603040 conv=notrunc 2>/dev/null &&
+  printf "$HAL_SWAP_BODY" | dd of="$1" bs=1 seek=2603040 conv=notrunc 2>/dev/null &&
+  printf '\106\214\000\024' | dd of="$1" bs=1 seek=2459584 conv=notrunc 2>/dev/null &&
   printf '\037\040\003\325' | dd of="$1" bs=1 seek=2618068 conv=notrunc 2>/dev/null &&
   printf '\037\040\003\325' | dd of="$1" bs=1 seek=1968640 conv=notrunc 2>/dev/null
 }
 
-# The reverse of _patch_hal: the stock bytes at the same three spots. Verified:
-# applied to the stereo build it gives back the stock build's exact hash.
-_unpatch_hal() {
+# The reverse of the v0.9.0-v0.9.4 stereo patch: the stock bytes at its three
+# spots (16 bytes). Verified: applied to that build it gives back the stock
+# build's exact hash. The current patch is undone from the stock copy instead.
+_unpatch_hal_v1() {
   printf '\377\003\002\321\375\173\004\251' | dd of="$1" bs=1 seek=2603040 conv=notrunc 2>/dev/null &&
   printf '\201\000\000\124' | dd of="$1" bs=1 seek=2618068 conv=notrunc 2>/dev/null &&
   printf '\201\000\000\124' | dd of="$1" bs=1 seek=1968640 conv=notrunc 2>/dev/null
@@ -120,6 +132,9 @@ stage_stereo() {
     case $_h in
       "$HAL_STOCK")  _patch_hal "$_tmp/$_n" || { _fail="patching $_n failed"; break; } ;;
       "$HAL_STEREO") ;;   # already ours (overlay mounted): keep as is
+      "$HAL_STEREO_V1")   # the earlier stereo build: back to stock, then patch
+        { _unpatch_hal_v1 "$_tmp/$_n" && [ "$(_sha "$_tmp/$_n")" = "$HAL_STOCK" ] && _patch_hal "$_tmp/$_n"; } ||
+          { _fail="converting the earlier stereo $_n failed"; break; } ;;
       *) _fail="$_src is not the analysed build ($_h) - refusing to patch an unknown binary"; break ;;
     esac
     [ "$(_sha "$_tmp/$_n")" = "$HAL_STEREO" ] || { _fail="patched $_n does not match the tested binary"; break; }
@@ -212,10 +227,10 @@ save_stock() {
     [ "$(_sha "$_t")" = "$_x" ] && continue
     case $(_sha "$_src") in
       "$_x") cp -f "$_src" "$_t.tmp" || return 1 ;;
-      "$_y")
+      "$_y"|"$HAL_STEREO_V1")
         case $_n in
           aurisys_config_rv.xml) _unpatch_aurisys "$_src" "$_t.tmp" || return 1 ;;
-          *) cp -f "$_src" "$_t.tmp" && _unpatch_hal "$_t.tmp" || return 1 ;;
+          *) cp -f "$_src" "$_t.tmp" && _unpatch_hal_v1 "$_t.tmp" || return 1 ;;
         esac ;;
       *) return 1 ;;
     esac
@@ -290,7 +305,9 @@ live_switch() {
   # The HAL loaded its files when it last started, so it runs what the
   # system shows now; nothing to do if that is already the wanted mode.
   _now=mono; stereo_active && _now=stereo
-  [ "$_now" = "$1" ] && return 0
+  # The earlier stereo HAL (no orientation swap) is replaced live too.
+  [ "$_now" = stereo ] && [ "$(_sha "$(_view "$HAL_DIR/audio.primary.mt6878.so")")" = "$HAL_STEREO_V1" ] && _now=stereo-v1
+  [ "$_now" = "$1" ] && { echo unchanged; return 0; }
   if in_call; then echo "a call is active"; return 1; fi
   # Stereo always mounts the staged files: check them before touching anything.
   if [ "$1" = stereo ]; then

@@ -23,7 +23,7 @@ speaker, the bottom speaker the right — no custom kernel, just root.
 1. Flash the zip in **Magisk / KernelSU / APatch** and reboot.
 2. Open **CMF Stereo** and pick **Stereo** — or in a terminal: `su -c stereoctl channels stereo`.
    It switches at once (the sound stops for a moment; press play again).
-3. Hold the phone with the earpiece on your **left**.
+3. Turn the phone sideways either way: left and right follow the screen.
 
 Works on the **CMF Phone 1 (A015)**. On any other phone it installs and does
 nothing.
@@ -41,7 +41,8 @@ nothing.
 ## Status
 
 **Current release: v0.9.4** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
-in daily use on the test phone. Mono and Stereo switch without a reboot.
+in daily use on the test phone. Mono and Stereo switch without a reboot. **Next: v0.9.5** (on
+`main`, not released yet): left and right follow the phone's orientation.
 
 **Verified on the phone**
 - v0.9.4 live switching: Mono -> Stereo -> Mono -> Stereo with `stereoctl channels`, no reboot,
@@ -60,6 +61,14 @@ in daily use on the test phone. Mono and Stereo switch without a reboot.
 - Hi-res playback (USB Audio Player Pro, Direct 192 kHz) still works in stereo.
 
 **Not tested on a phone yet**
+- v0.9.5 orientation swap. Checked: the patch runs in an ARM64 emulator against test buffers
+  (13 cases: 16/32-bit swapped at 270; untouched at 0/90, for any route but the speaker alone,
+  other formats, empty buffers; the rotation stored as Android sends it); the patched HAL
+  disassembles as intended; the hash is the same from dash, mksh and busybox, and from
+  converting the v0.9.4 stereo HAL. Needs on the phone: `stereoctl channels stereo` (switches
+  the running HAL live), then the left-only test file with the earpiece on your left (earpiece
+  plays) and on your right (speaker plays), and `getprop vendor.audiohal.cmf_rotation`
+  following the turns.
 - Live switching from the app's Mono/Stereo buttons (needs the next app build).
 - v0.9.3: on/off speed and the lighter daemon. Passes the test suite under mksh (Android's
   shell), dash and busybox; needs a check on the phone: `time su -c stereoctl off`, then
@@ -86,6 +95,7 @@ in daily use on the test phone. Mono and Stereo switch without a reboot.
 - `ADDA_DL_MAX_VOL` was tried for a louder earpiece: no clear difference, left out.
 
 **Fixed recently**
+- v0.9.5: turned with the earpiece on your right, left and right came out reversed.
 - v0.9.4: switching Mono and Stereo needed a reboot; it now restarts only the audio HAL.
   From a stereo boot, the stock files are rebuilt from the stereo ones (original bytes back,
   then hash-checked), so mono can be switched to live without ever having booted mono.
@@ -293,9 +303,10 @@ call is active, the mounts are undone and the change waits for a reboot.
 
 **What stereo changes**, and nothing else:
 
-1. **The HAL fold**: `doStereoToMonoConversionIfNeed` returns at once, and the
-   DSP task is told the speaker is stereo (`hw_info` bit `0x4`, two
-   branches). 16 bytes in three places — exactly the binary that was tested.
+1. **The HAL fold**: `doStereoToMonoConversionIfNeed` no longer folds to mono,
+   and the DSP task is told the speaker is stereo (`hw_info` bit `0x4`, two
+   branches). Since v0.9.5 that function instead does the **orientation swap**
+   (below). 222 bytes in four places; the result must hash to the tested build.
 2. **The DSP fold**: `AURISYS_SCENARIO_DSP_PLAYBACK_SMARTPA` runs
    `aurisys_demo` instead of `smartpa_awinic`. The phone's own
    `aurisys_config_rv.xml` already declares `aurisys_demo` for that scenario
@@ -333,9 +344,19 @@ the new build has been checked.
 - With the daemon stopped (`stereoctl off`) the amp goes back to its stock
   left slot on the next stream, so in stereo the speaker would play the left
   channel alone. Switch to mono if you want the module off.
-- Hold the phone with the earpiece on your **left** (rotated
-  counter-clockwise) for the image to be the right way round. The earpiece
-  cannot take the right channel: its DAC input has no CH2 source.
+- **Orientation swap** (v0.9.5): turned with the earpiece on your right, left
+  and right swap so the image stays the right way round. The earpiece cannot be
+  routed to the right channel (its DAC input has no CH2 source), so the swap is
+  done in the stream itself, in the HAL: Android already sends the HAL the
+  screen rotation (`rotation=0|90|270`, measured; 270 = earpiece on the right),
+  which the stock HAL drops. The patch keeps it in
+  `vendor.audiohal.cmf_rotation` (a MediaTek audio-HAL property, writable by
+  the HAL under the phone's own SELinux rules) and, for the speaker-only route
+  in 16- or 32-bit PCM (the cases MediaTek's fold handled), swaps the two
+  channels of every buffer while it reads 270. Headphones and every other
+  route are never touched. The code is `hal-swap/patch.S`; `hal-swap/run.sh`
+  assembles it, runs it in an ARM64 emulator against test buffers, and checks
+  the module carries exactly those bytes.
 
 MediaTek's "2nd loudspeaker" machinery **is** present on this build, in
 `/vendor/etc/audio_param/`:
