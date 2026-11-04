@@ -1,0 +1,31 @@
+name: Release notes
+
+# The notes for a release live in docs/releases/<tag>.md. Editing one on main
+# rewrites that release's description, so notes can be fixed after the
+# release without touching the files attached to it.
+on:
+  push:
+    branches: [main]
+    paths: ['docs/releases/*.md']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update the descriptions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for f in docs/releases/*.md; do
+            tag=$(basename "$f" .md)
+            if gh release view "$tag" >/dev/null 2>&1; then
+              gh release edit "$tag" --notes-file "$f" && echo "updated $tag"
+            else
+              echo "no release $tag yet - skipped"
+            fi
+          done

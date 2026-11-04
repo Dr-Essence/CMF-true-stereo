@@ -34,6 +34,22 @@ jobs:
           ./build.sh "CMF-true-stereo-$VER.zip"
           echo "ZIP=CMF-true-stereo-$VER.zip" >> "$GITHUB_ENV"
           echo "VER=$VER" >> "$GITHUB_ENV"
+          NOTES=docs/releases/$VER.md
+          if [ ! -f "$NOTES" ]; then
+            NOTES=release-body.md
+            cat > "$NOTES" <<'BODY'
+          Flash in Magisk / KernelSU / APatch, reboot. CMF Phone 1 (A015) only;
+          on other phones it installs inert.
+
+          **Mono** (default): both speakers play the full mix, with Awinic speaker protection.
+          **Stereo**: `stereoctl channels stereo`, reboot. Earpiece left, speaker right.
+          Read the README's *Mono and stereo* section first: stereo turns Awinic's
+          speaker protection off for media and holds a fixed amp attenuation instead.
+
+          Companion app: [CMF-true-stereo-manager](https://github.com/Dr-Essence/CMF-true-stereo-manager/releases)
+          BODY
+          fi
+          echo "NOTES=$NOTES" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -46,14 +62,7 @@ jobs:
           tag_name: ${{ env.VER }}
           target_commitish: ${{ github.sha }}
           name: CMF-true-stereo ${{ env.VER }}
-          body: |
-            Flash in Magisk / KernelSU / APatch, reboot. CMF Phone 1 (A015) only;
-            on other phones it installs inert.
-
-            **Mono** (default): both speakers play the full mix, with Awinic speaker protection.
-            **Stereo**: `stereoctl channels stereo`, reboot. Earpiece left, speaker right.
-            Read the README's *Mono and stereo* section first: stereo turns Awinic's
-            speaker protection off for media and holds a fixed amp attenuation instead.
-
-            Companion app: [CMF-true-stereo-manager](https://github.com/Dr-Essence/CMF-true-stereo-manager/releases)
+          # docs/releases/<version>.md when it exists (the Release notes
+          # workflow keeps it in sync afterwards), else the generic text.
+          body_path: ${{ env.NOTES }}
           files: ${{ env.ZIP }}
