@@ -1,0 +1,2 @@
+# build.sh output; releases are built by CI
+*.zip
