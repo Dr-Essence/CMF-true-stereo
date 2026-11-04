@@ -57,6 +57,8 @@ else
 fi
 
 applied=0
+was_playing=0
+atten_tick=0
 
 while true; do
   # Re-read config each cycle so stereoctl edits take effect without a reboot.
@@ -93,11 +95,20 @@ while true; do
   # left, and the full mix whenever the earpiece is not playing. Speaker
   # protection on media is the amp's hardware cut-outs plus this attenuation.
   if stereo_active; then
-    amp_hold_atten
+    _pb=0; playback_active && _pb=1
+    # The Awinic driver writes a kernel log line for every volume read, so the
+    # attenuation is checked when playback starts and every 10th cycle, not
+    # every cycle (that flooded dmesg and pushed the boot messages out).
+    if { [ $_pb -eq 1 ] && [ $was_playing -eq 0 ]; } || [ $atten_tick -le 0 ]; then
+      amp_hold_atten
+      atten_tick=10
+    fi
+    atten_tick=$((atten_tick - 1))
+    was_playing=$_pb
     # Idle: nothing to hold, and no point waking the amp's I2C bus.
     if [ $applied -eq 1 ]; then
       amp_set_chsel right
-    elif playback_active; then
+    elif [ $_pb -eq 1 ]; then
       amp_set_chsel mono
     fi
   fi

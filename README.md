@@ -40,8 +40,8 @@ nothing.
 ## Status
 
 **Current release: v0.9.3** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
-in daily use on the test phone. v0.9.3 makes switching on and off faster and the daemon
-lighter; it has not been on the phone yet.
+in daily use on the test phone. **Next: v0.9.4** (on `main`, not released yet) stops the daemon
+flooding the kernel log.
 
 **Verified on the phone**
 - Stereo: a left-only test file leaves the speaker silent on its right slot and plays on the
@@ -52,6 +52,9 @@ lighter; it has not been on the phone yet.
 - Hi-res playback (USB Audio Player Pro, Direct 192 kHz) still works in stereo.
 
 **Not tested on a phone yet**
+- v0.9.4: the amp attenuation check at playback start and every 10th cycle instead of every
+  cycle (simulated: 3 checks in 25 cycles instead of 25). Needs `dmesg | grep -c aw882xx_volume_get`
+  to stay low while the earpiece and speaker still play at the set levels.
 - v0.9.3: on/off speed and the lighter daemon. Passes the test suite under mksh (Android's
   shell), dash and busybox; needs a check on the phone: `time su -c stereoctl off`, then
   `time su -c stereoctl on`, and the earpiece still engaging when audio starts.
@@ -62,6 +65,13 @@ lighter; it has not been on the phone yet.
 - How the speaker holds up to long, loud stereo listening without Awinic's protection.
 
 **Pending**
+- Hardware checked (I2C devices, driver bindings, mixer, HAL): one Awinic amp at `6-0034`
+  (mono output, speaker only); the earpiece is on the codec's left DAC, which takes only
+  channel 1; the codec's earpiece amp is at its top step (+8 dB) and the digital path has
+  about 0.3 dB left. Ideas under consideration: an earpiece boost (high-pass, compressor and
+  limiter on the earpiece channel through Android's DynamicsProcessing, in the app), and a
+  mono speaker fallback when the phone is turned with the earpiece on the right (a true
+  left/right swap would need the channels swapped in the stream: a bigger project).
 - Which stereo speaker level sounds as loud as stock (Mono, with Awinic's protection): needs a
   by-ear comparison on the phone, level by level, with the same track.
 - A short clip of the earpiece and speaker splitting a game's or film's audio, for the README
@@ -70,6 +80,9 @@ lighter; it has not been on the phone yet.
 - `ADDA_DL_MAX_VOL` was tried for a louder earpiece: no clear difference, left out.
 
 **Fixed recently**
+- v0.9.4: the daemon read the amp's volume every cycle, and the Awinic driver logs each read,
+  so dmesg filled with `aw882xx_volume_get` lines (about 20 a minute) and lost the boot
+  messages.
 - v0.9.3: every mixer read started tinymix three times and every write five (its style check
   was cached inside a subshell and thrown away), on every 2 s daemon cycle. It is now detected
   once per process.
