@@ -173,17 +173,18 @@ unstage_stereo() {
 # work; players pause and need play again. So a mode change mounts the wanted
 # files over the vendor paths and restarts the HAL instead of the phone.
 #
-# The boot-time overlay belongs to the root manager (Magisk magic mount,
-# KernelSU overlayfs) and cannot be taken back file by file, so a live switch
-# always mounts on top: the staged stereo files, or a copy of the phone's own
-# stock files saved, hash-checked, while it ran mono. Mounts go into init's
-# mount namespace, where the HAL service runs, and are checked there through
-# /proc/1/root. Anything that does not check out is undone, and the change
-# waits for a reboot instead.
+# Magisk mounts each of this module's files over its vendor path at boot, in
+# init's mount namespace, which the HAL service shares (measured: same mnt
+# namespace id). A live switch takes our own mounts off (never anyone else's)
+# and mounts what the wanted mode still needs: nothing for mono (the vendor
+# files are stock), the staged files for stereo. Where the vendor view is not
+# stock without our mounts (a root manager that mounts differently), a
+# hash-checked copy of the stock files is mounted instead. Every file is read
+# back through /proc/1/root against the expected hash; anything that does not
+# check out ends on the stock files, and the change waits for a reboot.
 ##############################################################################
 
 STOCKDIR=$DATADIR/stock
-LIVEFILE=$DATADIR/live_mounts
 HAL_SVC=vendor.audio-hal
 
 # Run a command in init's mount namespace.
@@ -226,13 +227,36 @@ save_stock() {
   return 0
 }
 
-# Take back the mounts an earlier live switch made.
+# Mounts of ours over a vendor path, in init's (and the HAL's) namespace: the
+# root manager's boot mount of this module's files, and live-switch mounts of
+# the stock copies. Magisk bind-mounts each file, so these can be taken off
+# one by one; only a topmost mount whose source is ours is ever touched.
+MOUNTINFO=${MOUNTINFO:-/proc/1/mountinfo}
+OUR_MOUNTS=${OUR_MOUNTS:-/adb/modules/cmf_stereo/|/adb/cmf-stereo/}
+
+_top_is_ours() {
+  _r=$(awk -v mp="$1" '$5 == mp { r = $4 } END { print r }' "$MOUNTINFO" 2>/dev/null)
+  [ -n "$_r" ] && echo "$_r" | grep -qE "$OUR_MOUNTS"
+}
+
+# Take our mounts off <path>, topmost first. Lazy: the running HAL still maps
+# the library; the mount goes when it lets go (at the restart that follows).
+# Fails when a mount that is not ours is left on <path> (on top of ours, or
+# under it): the vendor file itself is never a mount of its own.
+_peel() {
+  _k=0
+  while [ $_k -lt 6 ] && _top_is_ours "$1"; do
+    _global umount -l "$1" 2>/dev/null || return 1
+    _k=$((_k + 1))
+  done
+  ! awk -v mp="$1" '$5 == mp { f = 1 } END { exit !f }' "$MOUNTINFO" 2>/dev/null
+}
+
 live_unmount() {
-  [ -f "$LIVEFILE" ] || return 0
-  while read -r _p; do
-    [ -n "$_p" ] && { _global umount "$_p" 2>/dev/null || _global umount -l "$_p" 2>/dev/null; }
-  done < "$LIVEFILE"
-  rm -f "$LIVEFILE"
+  _ok=0
+  for _n in $HAL_NAMES; do _peel "$HAL_DIR/$_n" || _ok=1; done
+  _peel "$AUR" || _ok=1
+  return $_ok
 }
 
 in_call() {
@@ -268,13 +292,16 @@ live_switch() {
   _now=mono; stereo_active && _now=stereo
   [ "$_now" = "$1" ] && return 0
   if in_call; then echo "a call is active"; return 1; fi
-  for _n in $HAL_NAMES; do
-    [ "$(_sha "$_hs/$_n")" = "$_hx" ] || { echo "no verified $1 copy of $_n"; return 1; }
-  done
-  [ "$(_sha "$_as")" = "$_ax" ] || { echo "no verified $1 copy of aurisys_config_rv.xml"; return 1; }
+  # Stereo always mounts the staged files: check them before touching anything.
+  if [ "$1" = stereo ]; then
+    for _n in $HAL_NAMES; do
+      [ "$(_sha "$_hs/$_n")" = "$_hx" ] || { echo "no verified $1 copy of $_n"; return 1; }
+    done
+    [ "$(_sha "$_as")" = "$_ax" ] || { echo "no verified $1 copy of aurisys_config_rv.xml"; return 1; }
+  fi
 
-  live_unmount
-  : > "$LIVEFILE"
+  # Down to the vendor files themselves, then mount what is still needed.
+  live_unmount || { echo "a mount over the audio files is not ours - not touching it"; return 1; }
   _fail=
   for _n in $HAL_NAMES aurisys_config_rv.xml; do
     case $_n in
@@ -282,20 +309,25 @@ live_switch() {
       *) _dst=$HAL_DIR/$_n; _src=$_hs/$_n; _x=$_hx ;;
     esac
     [ "$(_sha "$(_view "$_dst")")" = "$_x" ] && continue
+    # Mono lands here only when the vendor file is not stock without our
+    # mounts (a root manager that mounts differently): use the checked copy.
+    [ "$(_sha "$_src")" = "$_x" ] || { _fail="no verified $1 copy of ${_dst##*/}"; break; }
     _global mount -o bind "$_src" "$_dst" || { _fail="cannot mount over $_dst"; break; }
-    echo "$_dst" >> "$LIVEFILE"
     [ "$(_sha "$(_view "$_dst")")" = "$_x" ] || { _fail="$_dst does not read back as the $1 file"; break; }
   done
+  # Any failure ends on the vendor files themselves (stock) and a HAL
+  # restarted on them: a known-good state, whatever ran before.
   if [ -n "$_fail" ]; then
     live_unmount
-    log warn "live $1: $_fail - undone"
+    hal_restart
+    log warn "live $1: $_fail - back on the stock files"
     echo "$_fail"
     return 1
   fi
   if ! hal_restart; then
     live_unmount
     hal_restart
-    log warn "live $1: the audio HAL did not come back - undone"
+    log warn "live $1: the audio HAL did not come back - back on the stock files"
     echo "the audio HAL did not come back on the $1 files"
     return 1
   fi

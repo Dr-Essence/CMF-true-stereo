@@ -530,11 +530,14 @@ STUB
   _OPATH=$PATH; PATH=$L/bin:$PATH
   _OHAL_DIR=$HAL_DIR; _OAUR=$AUR; _OOV_HAL=$OV_HAL; _OOV_ETC=$OV_ETC
   _OHS=$HAL_STOCK; _OHX=$HAL_STEREO; _OAS=$AUR_STOCK; _OAX=$AUR_STEREO; _OLR=$LIVE_ROOT
+  _OMI=$MOUNTINFO; _OOM=$OUR_MOUNTS
   HAL_DIR=$L/vendor/lib64/hw; AUR=$L/vendor/etc/aurisys_config_rv.xml
   OV_HAL=$L/ov/hw; OV_ETC=$L/ov/etc; LIVE_ROOT=
+  MOUNTINFO=/proc/self/mountinfo; OUR_MOUNTS="$(basename "$TMP")/(live/ov|data/stock)/"
   HAL_STOCK=$(_sha "$HAL_DIR/audio.primary.mt6878.so"); AUR_STOCK=$(_sha "$AUR")
   HAL_STEREO=$(_sha "$OV_HAL/audio.primary.mt6878.so"); AUR_STEREO=$(_sha "$OV_ETC/aurisys_config_rv.xml")
   tick() { :; }
+  mounts() { awk -v d="$L/vendor" 'index($5, d) == 1' /proc/self/mountinfo | wc -l | tr -d ' '; }
 
   check "stock saved while mono" "$(save_stock && _sha "$STOCKDIR/audio.primary.mediatek.so")" "$HAL_STOCK"
   live_switch stereo >/dev/null; _rc=$?
@@ -547,27 +550,56 @@ STUB
   live_switch mono >/dev/null; _rc=$?
   check "stereo -> mono live" "$_rc $(stereo_active && echo stereo || echo mono)" "0 mono"
   check "HAL restarted for mono" "$(cat "$L/restarts")" "2"
-  check "no mounts left" "$([ -f "$LIVEFILE" ] && wc -l < "$LIVEFILE" | tr -d ' ' || echo 0)" "0"
+  check "no mounts left" "$(mounts)" "0"
 
   echo 1 > "$L/callstate"
   check "refused during a call" "$(live_switch stereo)" "a call is active"
-  check "nothing mounted for it" "$(stereo_active && echo stereo || echo mono)" "mono"
+  check "nothing mounted for it" "$(stereo_active && echo stereo || echo mono) $(mounts)" "mono 0"
   echo 0 > "$L/callstate"
 
   echo bad > "$L/hal"
   check "HAL that does not come back: refused" "$(live_switch stereo)" "the audio HAL did not come back on the stereo files"
-  check "and undone" "$(stereo_active && echo stereo || echo mono) $([ -s "$LIVEFILE" ] && echo mounts || echo clean)" "mono clean"
+  check "and back on stock" "$(stereo_active && echo stereo || echo mono) $(mounts)" "mono 0"
   echo good > "$L/hal"
 
-  # Booted stereo (the stock files are not visible): mono needs a saved copy.
+  # Booted stereo as Magisk does it: each staged file bind-mounted over its
+  # vendor path, then the staged files deleted (unstaged for the next boot).
+  # Measured on the phone: mounting on top of those fails (ENOENT); taking
+  # our own mounts off works.
   rm -rf "$STOCKDIR"
+  cp -a "$L/ov" "$L/ov.keep"
+  for _n in audio.primary.mt6878.so audio.primary.mediatek.so; do mount --bind "$OV_HAL/$_n" "$HAL_DIR/$_n"; done
   mount --bind "$OV_ETC/aurisys_config_rv.xml" "$AUR"
-  check "mono without a stock copy: refused" "$(live_switch mono)" "no verified mono copy of audio.primary.mt6878.so"
-  umount "$AUR"
+  rm -f "$OV_HAL/"* "$OV_ETC/"*
+  live_switch mono >/dev/null; _rc=$?
+  check "booted stereo, files deleted: mono live" "$_rc $(stereo_active && echo stereo || echo mono) $(mounts)" "0 mono 0"
+  cp -a "$L/ov.keep/." "$L/ov/"
+
+  # Someone else's mount on top is never taken off.
+  echo OTHER > "$L/other.so"
+  mount --bind "$L/other.so" "$HAL_DIR/audio.primary.mt6878.so"
+  check "a foreign mount: refused" "$(live_switch stereo)" "a mount over the audio files is not ours - not touching it"
+  check "and left in place" "$(cat "$HAL_DIR/audio.primary.mt6878.so")" "OTHER"
+  umount "$HAL_DIR/audio.primary.mt6878.so"
+
+  # Magisk's skeleton: a folder mounted over lib64/hw with empty placeholder
+  # files, our files bind-mounted on those. Under our mount there is no stock
+  # file, so mono mounts the checked stock copy.
+  save_stock >/dev/null
+  mkdir -p "$L/skel"; : > "$L/skel/audio.primary.mt6878.so"; : > "$L/skel/audio.primary.mediatek.so"
+  mount --bind "$L/skel" "$HAL_DIR"
+  for _n in audio.primary.mt6878.so audio.primary.mediatek.so; do mount --bind "$OV_HAL/$_n" "$HAL_DIR/$_n"; done
+  mount --bind "$OV_ETC/aurisys_config_rv.xml" "$AUR"
+  live_switch mono >/dev/null; _rc=$?
+  check "skeleton: mono live from the stock copy" "$_rc $(stereo_active && echo stereo || echo mono) $(cat "$HAL_DIR/audio.primary.mt6878.so")" "0 mono STOCK-HAL"
+  live_switch stereo >/dev/null; _rc=$?
+  check "skeleton: and back to stereo" "$_rc $(cat "$HAL_DIR/audio.primary.mediatek.so")" "0 STEREO-HAL"
+  live_unmount; umount "$HAL_DIR"
 
   live_unmount
   PATH=$_OPATH; HAL_DIR=$_OHAL_DIR; AUR=$_OAUR; OV_HAL=$_OOV_HAL; OV_ETC=$_OOV_ETC
   HAL_STOCK=$_OHS; HAL_STEREO=$_OHX; AUR_STOCK=$_OAS; AUR_STEREO=$_OAX; LIVE_ROOT=$_OLR
+  MOUNTINFO=$_OMI; OUR_MOUNTS=$_OOM
   tick() { sleep 0.1 2>/dev/null || sleep 1; }
 else
   echo "  skip - bind mounts need root"

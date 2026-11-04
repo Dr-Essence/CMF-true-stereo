@@ -31,9 +31,8 @@ if stereo_staged && [ "$(boot_strikes)" -ge 2 ]; then
   boot_strike_clear
 fi
 
-# A daemon lock from the previous boot names a pid that no longer exists, and
-# the mounts a live switch made are gone with the previous boot.
-rm -rf "$DATADIR/daemon.lock" "$DATADIR/daemon.pid" "$LIVEFILE"
+# A daemon lock from the previous boot names a pid that no longer exists.
+rm -rf "$DATADIR/daemon.lock" "$DATADIR/daemon.pid"
 
 # Anything active this boot counts as a strike until service.sh clears it.
 if [ -n "$OVERLAY_XML" ] || stereo_staged || [ "$(action_count)" -gt 0 ]; then

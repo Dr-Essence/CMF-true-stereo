@@ -60,9 +60,11 @@ Stereo without a reboot and stops the daemon flooding the kernel log.
   and back, each with the left-only test file, `stereoctl status` showing the right channels,
   and `stereoctl log` showing "live stereo: applied". Also unproven there: `nsenter` reaching
   init's mount namespace (if it cannot, the switch is refused and waits for a reboot).
-  On the phone so far: from a stereo boot, `channels mono` was refused safely ("no verified
-  mono copy") with the first v0.9.4 build; the stock copy is now rebuilt from the stereo files
-  (checked against the real files: exact stock hashes), so that case should switch live.
+  On the phone so far: from a stereo boot, `channels mono` was refused safely, first for lack of
+  a stock copy (now rebuilt from the stereo files: exact stock hashes on the real files), then
+  with "cannot mount over" (ENOENT): unstaging had deleted the files Magisk had bind-mounted,
+  and Linux refuses to mount over a deleted file. A live switch now takes our own mounts off
+  (only ours; anything else is refused) instead of mounting on top. Reproduced in the tests.
 - v0.9.4: the amp attenuation check at playback start and every 10th cycle instead of every
   cycle (simulated: 3 checks in 25 cycles instead of 25). Needs `dmesg | grep -c aw882xx_volume_get`
   to stay low while the earpiece and speaker still play at the set levels.
@@ -284,12 +286,14 @@ The CMF Stereo Manager app has the same switch.
 **Switching without a reboot** (v0.9.4). The module restarts the audio HAL
 (`setprop ctl.restart vendor.audio-hal`) on the wanted files instead of
 rebooting: about a second of silence, players pause, calls are unaffected
-(measured on the CMF Phone 1). The boot-time overlay belongs to the root manager
-and cannot be taken back file by file, so a live switch mounts on top of it, in
-init's mount namespace where the HAL runs: the staged stereo files, or a copy of
-the phone's own stock files: copied when it booted mono, or rebuilt from the
-stereo files by putting the original bytes back, and kept only when it hashes to
-the stock build. Every
+(measured on the CMF Phone 1). Magisk bind-mounts each of the module's files over its
+vendor path at boot, in init's mount namespace, which the HAL shares (measured).
+A live switch takes those mounts of ours off (only ours: a mount from anywhere
+else on those paths and the switch is refused) and mounts what the wanted mode
+still needs: the staged files for stereo, nothing for mono, or, where Magisk
+left a placeholder rather than the stock file, a copy of the phone's own stock
+files (copied when it booted mono, or rebuilt from the stereo files by putting
+the original bytes back, and kept only when it hashes to the stock build). Every
 file is read back through `/proc/1/root` and must hash to the expected build;
 the new HAL process must still be running 3 s later. If any check fails, or a
 call is active, the mounts are undone and the change waits for a reboot.
