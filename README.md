@@ -53,7 +53,15 @@ carry such a track in `vendor.audiohal.cmf_swap`; the HAL swaps only those, only
 **Verified on the phone**
 - v1.0.2: VLC and the CMF L/R Test app's MOVIE + EFFECT button follow the rotation (the
   left-only file plays on the side of the earpiece or speaker it should), and USB Audio Player
-  Pro in bit-perfect mode.
+  Pro in bit-perfect mode, and the CMF L/R Test app's AAUDIO (low latency, exclusive, as a
+  game asks), AAUDIO SHARED and FLOAT buttons. On the speaker AAudio cannot get the direct
+  MMAP path (`mmap_no_irq_out` lists only the earpiece and wired headsets), so low-latency
+  games play through Android's mixer, which swaps them.
+- Compressed offload (MP3 decoded by the DSP): Android refuses it on this phone
+  (`AudioManager.isOffloadedPlaybackSupported` false for MP3 on the speaker), so music
+  players do not use that path here. Likely reason, not yet proven: the audio policy refuses
+  offload while a non-offloadable effect is on, and Nothing's Dirac (flags 0x280, no offload
+  support) is on for the output mix. One check would settle it: Dirac off, COMPRESSED again.
 - v1.0.1: the CMF L/R Test app's four buttons (MUSIC, MOVIE, GAME, SPEECH) and InShot follow
   the rotation; VLC does not (it plays the same side whichever way the phone is turned).
 - v0.9.9 orientation swap by Dirac's tuning: the left-only file in USB Audio Player Pro
@@ -97,9 +105,8 @@ carry such a track in `vendor.audiohal.cmf_swap`; the HAL swaps only those, only
 **Not tested on a phone yet**
 - **v1.0.2**: an app with its own effect in another category (music, game) and an app with no
   effect after VLC (UAPP) in both orientations; only VLC and MOVIE + EFFECT were tried. Not
-  yet checked: compressed offload playback, AAudio MMAP (low-latency games) and float streams
-  (every mixer output on this phone hands the HAL 32-bit integers, `HAL format: 0x3` in the
-  dumps; float could only come through a direct output that asks for it, not seen yet). Each needs
+  yet checked: compressed offload with Dirac off (the one case where Android might grant
+  it; the module does not swap compressed audio). Each needs
   the left-only file played that way, earpiece on your right. Tested here: the HAL patch in an
   ARM64 emulator (18 cases), the bytes and branch against the assembled code, every earlier
   stereo HAL (v0.9.0-v1.0.1) converting to v1.0.2 and undoing to the exact stock hash on the
