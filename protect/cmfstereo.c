@@ -14,8 +14,11 @@
 //   2. speaker (right): a bass limiter (only the band below 100 Hz, only when
 //      it is louder than its ceiling: quiet bass is untouched), then a peak
 //      limiter at its ceiling;
-//   3. earpiece (left): a peak limiter at its ceiling (measured: it clips in the
-//      top 1.5 dB).
+//   3. earpiece (left): the leveller, if on (raises quiet and medium passages,
+//      at most by its strength's limit, never above -18 dBFS of loudness, and
+//      not the silence between them), then a peak limiter at its ceiling
+//      (measured: it clips in the top 1.5 dB; with the leveller on and the
+//      limiter off, the ceiling is -0.1 dBFS: peaks never above today's).
 // Ceilings come from properties in hundredths of a dB of full scale; a ceiling
 // at or above 0 dBFS (or unset) switches that stage off and leaves the samples
 // exactly as they were.
@@ -39,11 +42,19 @@ typedef struct {
   bq_t lp[2], hp[2];               // 4th-order Linkwitz-Riley split, speaker
   float bass_env, bass_gain;
   float spk_env, ear_env;
+  float lev_ms, lev_gain;          // earpiece leveller: loudness (mean square), gain
 } state_t;
 
 static state_t g_state[SLOTS];
 static coef_t g_lp, g_hp;
 static float g_rel_bass, g_rel_peak, g_att_gain;
+static float g_lev_avg, g_lev_up, g_lev_down;
+
+// Leveller strengths 1-3: how much of the gap to the target is made up, and
+// the most it ever adds.
+static const float LEV_TARGET_DB = -18.0f, LEV_GATE_DB = -60.0f;
+static const float LEV_SHARE[4] = { 0, 0.35f, 0.55f, 0.75f };
+static const float LEV_MAX_DB[4] = { 0, 4.0f, 8.0f, 12.0f };
 static int g_ready;
 
 static float qprop(const char *k, float def) {
@@ -89,6 +100,9 @@ static void init(void) {
   g_rel_bass = expf(-1.0f / (0.300f * RATE));   // bass limiter lets go over 300 ms
   g_rel_peak = expf(-1.0f / (0.100f * RATE));   // peak limiters over 100 ms
   g_att_gain = expf(-1.0f / (0.005f * RATE));   // bass gain moves down over 5 ms
+  g_lev_avg = expf(-1.0f / (0.100f * RATE));    // leveller hears the last 100 ms
+  g_lev_up = expf(-1.0f / (0.400f * RATE));     // and raises its gain over 400 ms,
+  g_lev_down = expf(-1.0f / (0.010f * RATE));   // lowering it within 10 ms
   g_ready = 1;
   // Tells the module the protection is running (it only lowers the speaker's
   // fixed attenuation once this reads 1).
@@ -103,6 +117,7 @@ static state_t *slot(void *owner) {
       state_t *s = &g_state[i];
       memset(s->lp, 0, sizeof s->lp); memset(s->hp, 0, sizeof s->hp);
       s->bass_env = s->spk_env = s->ear_env = 0; s->bass_gain = 1;
+      s->lev_ms = 0; s->lev_gain = 1;
       return s;
     }
   }
@@ -135,7 +150,11 @@ __attribute__((visibility("default"))) int cmf_process(void *self, void *buf, si
              (iprop("vendor.audiohal.cmf_swap", 0) & (int)flags) != 0;
   float spk = qprop("vendor.audiohal.cmf_spk_ceil", 0), bass = qprop("vendor.audiohal.cmf_bass_ceil", 0);
   float ear = qprop("vendor.audiohal.cmf_ear_ceil", 0);
-  int do_spk = spk < 0, do_bass = bass < 0, do_ear = ear < 0;
+  int lev = iprop("vendor.audiohal.cmf_ear_level", 0);
+  if (lev < 0 || lev > 3) lev = 0;
+  int do_spk = spk < 0, do_bass = bass < 0, do_ear = ear < 0 || lev > 0;
+  // With the leveller on and the limiter off, peaks are still held at today's.
+  if (ear >= 0 && lev > 0) ear = -10;
   if (!swap && !do_spk && !do_bass && !do_ear) return 0;
 
   size_t frames = bytes / (fmt == 1 ? 4 : 8);
@@ -171,6 +190,23 @@ __attribute__((visibility("default"))) int cmf_process(void *self, void *buf, si
       r = lo * s->bass_gain + hi;
     }
     if (do_spk) r = limit(r, &s->spk_env, g_rel_peak, cs);
+    if (lev > 0) {
+      // Loudness of the last 100 ms of the earpiece's own signal, in dB.
+      s->lev_ms = s->lev_ms * g_lev_avg + l * l * (1 - g_lev_avg);
+      float ldb = 10.0f * log10f(s->lev_ms + 1e-12f) + 3.01f;   // a sine's peak level
+      float want_db = 0;
+      if (ldb > LEV_GATE_DB && ldb < LEV_TARGET_DB) {
+        want_db = (LEV_TARGET_DB - ldb) * LEV_SHARE[lev];
+        if (want_db > LEV_MAX_DB[lev]) want_db = LEV_MAX_DB[lev];
+        // Fade out towards the gate, so the hiss between passages is not raised.
+        float room = (ldb - LEV_GATE_DB) / 12.0f;
+        if (room < 1) want_db *= room;
+      }
+      float want = powf(10.0f, want_db / 20.0f);
+      s->lev_gain = want < s->lev_gain ? want + (s->lev_gain - want) * g_lev_down
+                                       : want + (s->lev_gain - want) * g_lev_up;
+      l *= s->lev_gain;
+    }
     if (do_ear) l = limit(l, &s->ear_env, g_rel_peak, ce);
     // A channel nothing changed keeps its exact samples.
     if (fmt == 1) {

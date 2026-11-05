@@ -93,6 +93,29 @@ int main(void) {
   sine(0, 200, -6, 1); run(&h2); run(&h2);
   check("earpiece 200 Hz at -6 dBFS: unchanged, bass kept", fabs(peak(0, N / 2) - -6) < 0.02);
 
+  // Earpiece leveller (left only), strength 3, limiter on at -2.5.
+  setp("vendor.audiohal.cmf_ear_ceil", "-250"); setp("vendor.audiohal.cmf_ear_level", "3");
+  struct handler h3; h3.a = &at;
+  sine(0, 500, -40, 1); run(&h3); sine(0, 500, -40, 1); run(&h3);
+  { double p = peak(0, N / 2); printf("        leveller 3: 500 Hz at -40 dBFS -> %.1f dBFS\n", p);
+    check("leveller raises a quiet passage by its limit (12 dB)", fabs(p - -28) < 0.5); }
+  sine(0, 500, -6, 1); run(&h3); sine(0, 500, -6, 1); run(&h3);
+  check("leveller leaves a loud passage alone", fabs(peak(0, N / 2) - -6) < 0.05);
+  sine(0, 500, -75, 1); run(&h3); sine(0, 500, -75, 1); run(&h3);
+  check("leveller does not raise near-silence (-75 dBFS)", fabs(peak(0, N / 2) - -75) < 0.3);
+  // A quiet passage, then a sudden loud one: never above the ceiling.
+  memset(b32, 0, sizeof b32);
+  for (int i = 0; i < N; i++) b32[2 * i] = (int32_t)((i < N / 2 ? 0.01 : 1.0) * 0.999 * sin(2 * M_PI * 300 * i / 48000) * 2147483647.0);
+  run(&h3);
+  check("quiet then sudden loud: peaks held at -2.5 dBFS", peak(0, 0) <= -2.49);
+  check("the speaker side is untouched by the leveller", peak(1, 0) < -200);
+  setp("vendor.audiohal.cmf_ear_ceil", "0");
+  sine(0, 500, -1, 1); run(&h3);
+  check("leveller with the limiter off: peaks still held at -0.1 dBFS", peak(0, 0) <= -0.09);
+  setp("vendor.audiohal.cmf_ear_level", "1"); sine(0, 500, -40, 1); run(&h3); sine(0, 500, -40, 1); run(&h3);
+  check("strength 1 adds at most 4 dB", fabs(peak(0, N / 2) - -36) < 0.5);
+  setp("vendor.audiohal.cmf_ear_level", "0"); setp("vendor.audiohal.cmf_ear_ceil", "-250");
+
   // Many streams: never crashes, keeps working.
   struct handler hs[12]; for (int i = 0; i < 12; i++) { hs[i].a = &at; sine(0, 2000, 0, 1); run(&hs[i]); }
   check("12 streams (more than its 8 slots): still limits", peak(0, 0) <= -2.49);

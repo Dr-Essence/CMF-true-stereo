@@ -42,9 +42,9 @@ nothing.
 
 ## Status
 
-**Current release: v1.0.4** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is in
+**Current release: v1.0.5** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is in
 daily use on the test phone, with the module's own protection running in the audio HAL (deep
-bass guard, earpiece limiter, optional speaker boost). Mono and Stereo switch without a reboot,
+bass guard, earpiece limiter, optional speaker boost and earpiece leveller). Mono and Stereo switch without a reboot,
 and Magisk offers new releases as updates. Left and right follow the phone's orientation for
 every way apps play sound on this phone. "While playing" engages the earpiece for games and
 music alike. The full history of findings, tests and fixes is in [CHANGELOG.md](CHANGELOG.md).
@@ -66,6 +66,15 @@ music alike. The full history of findings, tests and fixes is in [CHANGELOG.md](
 - Earpiece at the receiver amp's top step (+8 dB); hi-res playback still works in stereo.
 
 **Not tested on a phone yet**
+- **v1.0.5 earpiece leveller** (`stereoctl protect leveller`, both apps; off by default):
+  raises the earpiece's quiet and medium passages towards -18 dBFS of loudness by at most
+  4 / 8 / 12 dB (light / medium / strong), leaves near-silence (below -60 dBFS) alone, changes
+  no frequency, and keeps peaks at the earpiece's ceiling. Needs on the phone: a listen with
+  dynamic music (film, classical) at each strength. Tested here: 7 new host tests (a -40 dBFS
+  passage raised by exactly 12 dB at strong and 4 dB at light, -6 dBFS and -75 dBFS left
+  alone, a sudden loud passage after a quiet one still held at -2.5 dBFS, -0.1 dBFS with the
+  limiter off, the speaker untouched), the same gain from 50 Hz to 3 kHz with no added
+  distortion, the NDK build, 194 module checks in four shells.
 - Boost 6 over a longer listen (it was tried briefly with the other settings).
 - The protection after a live switch from a mono boot: by design it starts only after a
   reboot (the library is not in place until then; stereo plays as v1.0.3, boost ignored).
@@ -274,7 +283,7 @@ capture):
 | Speaker peaks | about -5 dB below the amp's full output | about -6 dB (fixed attenuation); with boost, a limiter keeps them at -5 dB |
 | 100 Hz | cut by 16 dB at every level | untouched while quiet; held at -8 / -14 / -20 dB below full output when loud (light / medium / strong) |
 | 150 Hz-3 kHz | about +3.5 dB EQ | unchanged |
-| Earpiece | (not Awinic's) clips in its top 1.5 dB of full scale | limited at -2.5 dBFS |
+| Earpiece | (not Awinic's) clips in its top 1.5 dB of full scale | limited at -2.5 dBFS; optional leveller raises quiet passages, peaks unchanged |
 
 Also measured: the speaker's resonance at about 1 kHz (from Awinic's current/voltage sense);
 Dirac (MUSIC) adds +5 to +6 dB at 200-500 Hz, a limiter at about -0.2 dBFS and a second
@@ -427,6 +436,8 @@ stereoctl protect boost 0-6       speaker boost (dB less fixed attenuation, peak
 stereoctl protect bass off|light|medium|strong
                                   deep bass guard (below 100 Hz, only when loud)
 stereoctl protect earpiece on|off earpiece limiter (-2.5 dBFS)
+stereoctl protect leveller off|light|medium|strong
+                                  earpiece leveller (quiet passages up 4 / 8 / 12 dB at most)
 
 stereoctl xml-patch           install the stereo speaker-port overlay (reboot)
 stereoctl xml-revert          remove it (reboot)
@@ -471,8 +482,9 @@ so the installer sets all six playback tasks. Controls that cannot be read
 fall back to the procfs scan rather than reporting "never playing" forever.
 
 `SPEAKER_BOOST` (0-6, default 0), `BASS_PROTECT` (off / light / medium /
-strong, default medium) and `EARPIECE_LIMIT` (on / off, default on) set the
-stereo protection; change them with `stereoctl protect` or the apps.
+strong, default medium), `EARPIECE_LIMIT` (on / off, default on) and
+`EARPIECE_LEVELLER` (off / light / medium / strong, default off) set the stereo
+protection; change them with `stereoctl protect` or the apps.
 
 `GUARD_CTL` / `GUARD_VALUE` gate the routing on a mixer control's value. On
 the CMF Phone 1 the guard is `aw_dev_0_switch` = `Enable`: the HAL disables
@@ -683,7 +695,7 @@ app -> Android's mixer (AudioFlinger)            swaps L/R itself at rotation 27
        ::doStereoToMonoConversionIfNeed          protect/libcmfstereo.so and calls it
          rotation swap (VLC-type outputs)        <- vendor.audiohal.cmf_swap (daemon)
          speaker: bass guard, peak limiter       <- vendor.audiohal.cmf_*_ceil (daemon)
-         earpiece: limiter
+         earpiece: leveller, limiter
     -> audio DSP, aurisys_demo (pass-through)    aurisys_config_rv.xml patched
     -> DL_24CH ch1 -> codec DAC -> earpiece      routing: config/actions.cmf1.conf
        DL_24CH ch2 -> Awinic amp (right slot) -> speaker   amp slot/attenuation: daemon
@@ -716,7 +728,7 @@ function changes the level, so the library's ceilings are exact.
 ### Checks
 
 ```sh
-sh tests/run-tests.sh      # 190 checks; run under sh, dash, mksh and busybox sh
+sh tests/run-tests.sh      # 194 checks; run under sh, dash, mksh and busybox sh
 sh hal-swap/run.sh         # the HAL patch in qemu-aarch64 (needs clang, ld.lld, qemu)
 sh protect/build.sh        # the library rebuilds byte for byte (needs the NDK)
 ./build.sh                 # the flashable zip

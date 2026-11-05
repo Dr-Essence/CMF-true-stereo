@@ -601,24 +601,29 @@ _OP=$PATH; PATH=$TMP/pb2:$PATH
 if [ -z "$(command -v resetprop || true)" ]; then
   _OHD=$HAL_DIR; HAL_DIR=$TMP/libhw; mkdir -p "$HAL_DIR"; _OLR=$LIVE_ROOT; LIVE_ROOT=
   STEREO_ATTEN_DB=6; SPEAKER_BOOST=6; BASS_PROTECT=medium; EARPIECE_LIMIT=on
-  check "not running: no boost, speaker limiter off, bass -8, earpiece -2.5" "$(prot_atten_db) $(prot_ceilings)" "6 0 -800 -250"
+  check "not running: no boost, speaker limiter off, bass -8, earpiece -2.5" "$(prot_atten_db) $(prot_ceilings)" "6 0 -800 -250 0"
   printf 1 > "$P/vendor.audiohal.cmf_prot"
   check "marked running but no library file: still no boost" "$(prot_atten_db)" "6"
   cp "$ROOT/protect/libcmfstereo.so" "$HAL_DIR/$LIB"
-  check "running, boost 6: amp 0 dB, speaker peaks -5, bass -14" "$(prot_atten_db) $(prot_ceilings)" "0 -500 -1400 -250"
+  check "running, boost 6: amp 0 dB, speaker peaks -5, bass -14" "$(prot_atten_db) $(prot_ceilings)" "0 -500 -1400 -250 0"
   SPEAKER_BOOST=3
-  check "boost 3: amp 3 dB, speaker -2, bass -11" "$(prot_atten_db) $(prot_ceilings)" "3 -200 -1100 -250"
+  check "boost 3: amp 3 dB, speaker -2, bass -11" "$(prot_atten_db) $(prot_ceilings)" "3 -200 -1100 -250 0"
   SPEAKER_BOOST=0
-  check "boost 0: exactly as before (amp 6 dB, speaker limiter off)" "$(prot_atten_db) $(prot_ceilings)" "6 0 -800 -250"
-  BASS_PROTECT=light; check "bass light at boost 0: -2" "$(prot_ceilings)" "0 -200 -250"
-  BASS_PROTECT=strong; check "bass strong at boost 0: -14" "$(prot_ceilings)" "0 -1400 -250"
-  BASS_PROTECT=off; EARPIECE_LIMIT=off; check "bass off, earpiece off" "$(prot_ceilings)" "0 0 0"
+  check "boost 0: exactly as before (amp 6 dB, speaker limiter off)" "$(prot_atten_db) $(prot_ceilings)" "6 0 -800 -250 0"
+  BASS_PROTECT=light; check "bass light at boost 0: -2" "$(prot_ceilings)" "0 -200 -250 0"
+  BASS_PROTECT=strong; check "bass strong at boost 0: -14" "$(prot_ceilings)" "0 -1400 -250 0"
+  BASS_PROTECT=off; EARPIECE_LIMIT=off; check "bass off, earpiece off" "$(prot_ceilings)" "0 0 0 0"
   BASS_PROTECT=medium; EARPIECE_LIMIT=on; STEREO_ATTEN_DB=12; SPEAKER_BOOST=6
-  check "speaker level lower (12 dB) + boost 6: amp 6 dB, limiter off" "$(prot_atten_db) $(prot_ceilings)" "6 0 -800 -250"
+  check "speaker level lower (12 dB) + boost 6: amp 6 dB, limiter off" "$(prot_atten_db) $(prot_ceilings)" "6 0 -800 -250 0"
   STEREO_ATTEN_DB=6; SPEAKER_BOOST=9
   check "boost above 6 is held at 6" "$(prot_atten_db)" "0"
+  EARPIECE_LEVELLER=light; check "leveller light: strength 1" "$(prot_ceilings | cut -d' ' -f4)" "1"
+  EARPIECE_LEVELLER=strong; check "leveller strong: strength 3" "$(prot_ceilings | cut -d' ' -f4)" "3"
+  EARPIECE_LEVELLER=bogus; check "unknown leveller value: off" "$(prot_ceilings | cut -d' ' -f4)" "0"
+  EARPIECE_LEVELLER=medium
   SPEAKER_BOOST=6; prot_apply
-  check "ceilings handed to the library" "$(cat "$P/vendor.audiohal.cmf_spk_ceil") $(cat "$P/vendor.audiohal.cmf_bass_ceil") $(cat "$P/vendor.audiohal.cmf_ear_ceil")" "-500 -1400 -250"
+  check "ceilings handed to the library" "$(cat "$P/vendor.audiohal.cmf_spk_ceil") $(cat "$P/vendor.audiohal.cmf_bass_ceil") $(cat "$P/vendor.audiohal.cmf_ear_ceil") $(cat "$P/vendor.audiohal.cmf_ear_level")" "-500 -1400 -250 2"
+  EARPIECE_LEVELLER=off
   # The amp: a stand-in volume control.
   cat > "$TMP/pb2/tm" <<SH
 #!/bin/sh
@@ -645,14 +650,16 @@ SH
   check "stereoctl protect boost 4 -> stereo.conf" "$(grep -c '^SPEAKER_BOOST=4$' "$CONF")" "1"
   MODDIR=$ROOT DATADIR=$DATADIR sh "$ROOT/scripts/stereoctl" protect bass strong >/dev/null 2>&1
   check "stereoctl protect bass strong -> stereo.conf" "$(grep -c '^BASS_PROTECT=strong$' "$CONF")" "1"
+  MODDIR=$ROOT DATADIR=$DATADIR sh "$ROOT/scripts/stereoctl" protect leveller medium >/dev/null 2>&1
+  check "stereoctl protect leveller medium -> stereo.conf" "$(grep -c '^EARPIECE_LEVELLER=medium$' "$CONF")" "1"
   check "a wrong value is refused" "$(MODDIR=$ROOT DATADIR=$DATADIR sh "$ROOT/scripts/stereoctl" protect boost 9 | head -n 1)" "usage: stereoctl protect boost 0-6"
   check "the status names the protection" "$(echo "$_o" | grep -c '^protection: ')" "1"
 else
   ok "skip - resetprop present on this host"
 fi
 PATH=$_OP
-check "the default config has the three settings" \
-  "$(grep -cE '^(SPEAKER_BOOST=0|BASS_PROTECT=medium|EARPIECE_LIMIT=on)$' "$ROOT/config/stereo.conf")" "3"
+check "the default config has the four settings" \
+  "$(grep -cE '^(SPEAKER_BOOST=0|BASS_PROTECT=medium|EARPIECE_LIMIT=on|EARPIECE_LEVELLER=off)$' "$ROOT/config/stereo.conf")" "4"
 check "the library is packaged" "$(grep -c 'protect/libcmfstereo.so' "$ROOT/build.sh")" "1"
 check "the library shipped is the tested build" "$(sha256sum "$ROOT/protect/libcmfstereo.so" | cut -d' ' -f1)" "$LIB_HASH"
 if command -v cc >/dev/null 2>&1; then

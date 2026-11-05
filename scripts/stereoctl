@@ -50,6 +50,9 @@ stereoctl - CMF Phone 1 stereo speaker control
                       gets loud: -8 / -14 / -20 dB below the amp's full output
   protect earpiece on|off
                       hold the earpiece below -2.5 dBFS (it clips above)
+  protect leveller off|light|medium|strong
+                      raise the earpiece's quiet and medium passages (at most
+                      4 / 8 / 12 dB, no frequency changed, peaks never higher)
 
   xml-patch           overlay a Speaker-port-stereo audio policy (reboot)
   xml-revert          remove that overlay (reboot)
@@ -420,7 +423,10 @@ cmd_protect() {
     earpiece)
       case ${2:-} in on|off) _conf_set EARPIECE_LIMIT "$2"; EARPIECE_LIMIT=$2 ;;
         *) echo "usage: stereoctl protect earpiece on|off"; return 1 ;; esac ;;
-    *) echo "usage: stereoctl protect [boost N | bass LEVEL | earpiece on|off]"; return 1 ;;
+    leveller)
+      case ${2:-} in off|light|medium|strong) _conf_set EARPIECE_LEVELLER "$2"; EARPIECE_LEVELLER=$2 ;;
+        *) echo "usage: stereoctl protect leveller off|light|medium|strong"; return 1 ;; esac ;;
+    *) echo "usage: stereoctl protect [boost N | bass LEVEL | earpiece on|off | leveller LEVEL]"; return 1 ;;
   esac
   # Applied by the daemon within one cycle; also now, if stereo runs.
   stereo_active && prot_apply
@@ -432,7 +438,8 @@ cmd_protect() {
   echo "boost:       ${SPEAKER_BOOST:-0} dB  (amp attenuation now $(prot_atten_db) dB)"
   echo "bass:        ${BASS_PROTECT:-medium}"
   echo "earpiece:    ${EARPIECE_LIMIT:-on}"
-  echo "ceilings:    speaker $1, bass $2, earpiece $3 (1/100 dB of full scale, 0 = off)"
+  echo "leveller:    ${EARPIECE_LEVELLER:-off}"
+  echo "ceilings:    speaker $1, bass $2, earpiece $3 (1/100 dB of full scale, 0 = off), leveller $4"
 }
 
 cmd_restart() {

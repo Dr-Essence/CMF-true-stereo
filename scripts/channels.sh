@@ -71,7 +71,7 @@ OV_ETC=$MODDIR/system/vendor/etc
 # earpiece limiter. Not a vendor file: it ships in the module and is staged
 # next to the stereo HAL, so a mono boot stays all stock.
 LIB=libcmfstereo.so
-LIB_HASH=d476a1e3d3d57001c235a2589eca232c6b63b2943a3fa773083fd9f054167796
+LIB_HASH=bddc81fe27aa92df289446299dc30c6b2356b14fa0b9ed9178041924629f64cc
 LIB_SRC=$MODDIR/protect/$LIB
 
 # Every file stereo replaces. _spec NAME sets its path (_dst), its stock and
@@ -520,7 +520,11 @@ live_switch() {
 #   - the speaker's band below 100 Hz at a ceiling (light -8, medium -14,
 #     strong -20 dB below the amp's full output), only when it is louder:
 #     quiet bass is untouched, unlike Awinic's fixed cut;
-#   - the earpiece at -2.5 dBFS when its limiter is on.
+#   - the earpiece at -2.5 dBFS when its limiter is on;
+#   - the earpiece leveller (EARPIECE_LEVELLER off|light|medium|strong): its
+#     quiet and medium passages raised by at most 4 / 8 / 12 dB towards
+#     -18 dBFS, near-silence left alone, peaks still at the earpiece's ceiling
+#     (-0.1 dBFS with the limiter off: never above today's).
 # Ceilings reach the library as properties in hundredths of a dB of the
 # samples' full scale; 0 switches a stage off.
 ##############################################################################
@@ -544,7 +548,8 @@ prot_atten_db() {
   echo "$_e"
 }
 
-# The three ceilings, in hundredths of a dB of full scale (0 = off).
+# The three ceilings, in hundredths of a dB of full scale (0 = off), and the
+# leveller's strength (0-3).
 prot_ceilings() {
   _e=$(prot_atten_db)
   _s=$(( (_e - 5) * 100 )); [ "$_s" -ge 0 ] && _s=0
@@ -553,7 +558,8 @@ prot_ceilings() {
   esac
   if [ -n "$_bq" ]; then _bb=$(( (_bq + _e) * 100 )); [ "$_bb" -ge 0 ] && _bb=0; else _bb=0; fi
   case ${EARPIECE_LIMIT:-on} in off) _ec=0 ;; *) _ec=-250 ;; esac
-  echo "$_s $_bb $_ec"
+  case ${EARPIECE_LEVELLER:-off} in light) _lv=1 ;; medium) _lv=2 ;; strong) _lv=3 ;; *) _lv=0 ;; esac
+  echo "$_s $_bb $_ec $_lv"
 }
 
 _setprop() {
@@ -586,6 +592,7 @@ prot_apply() {
   _setprop vendor.audiohal.cmf_spk_ceil "$1"
   _setprop vendor.audiohal.cmf_bass_ceil "$2"
   _setprop vendor.audiohal.cmf_ear_ceil "$3"
+  _setprop vendor.audiohal.cmf_ear_level "$4"
 }
 
 ##############################################################################
