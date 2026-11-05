@@ -139,6 +139,14 @@ carry such a track in `vendor.audiohal.cmf_swap`; the HAL swaps only those, only
 **Pending**
 - If an app with its own effect and an ordinary app play on the same output at the same time,
   one of them is reversed at rotation 270 (the HAL sees only the mixed stream). Not seen yet.
+- Earpiece boost, measured: there is no hidden attenuation to win back. The HAL's own
+  recordings (CMF L/R Test FULL CHECK) show the beep at the same level from Android's output
+  to the HAL (-8.7 dBFS, the test file's own level at full volume) and through the audio DSP
+  (-56.9 in the DSP's 8.24 fixed-point dump, the same -8.7 dBFS), then `ADDA_DL_GAIN` -0.3 dB
+  and the receiver amp at its top step (+8 dB). A louder earpiece therefore needs either more
+  average power or a different spread of frequencies; the option without any EQ is a leveller
+  whose peaks never exceed today's full-scale peaks (more for quiet, dynamic recordings, little
+  for already loud masters).
 - Speaker limiter, earpiece boost and EQ (asked for; design stage). Where it can run: the
   HAL's playback path calls `doStereoToMonoConversionIfNeed` (our swap) for every speaker
   stream, including USB Audio Player Pro's direct hi-res output, before the DSP, which runs
