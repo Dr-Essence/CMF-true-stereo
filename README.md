@@ -117,6 +117,12 @@ back safely, and decides the orientation swap by Nothing's Dirac tuning instead 
 - How the speaker holds up to long, loud stereo listening without Awinic's protection.
 
 **Pending**
+- InShot (forced to landscape with a rotation-control app) plays reversed with the earpiece on
+  your right: right only with the module's swap off, although Dirac read MOVIE throughout
+  (measured), where VLC is right with it on. Dirac writes `persist.vendor.newdirac.cur.config`
+  on every tuning change (`DiracSound_command`, checked in `libdiraceffect_NT.so`), so the
+  value is not stale; what else swaps InShot is not known yet. Possible fix if more apps turn
+  up: a list of apps the swap leaves alone.
 - Speaker limiter, earpiece boost and EQ (asked for; design stage). Where it can run: the
   HAL's playback path calls `doStereoToMonoConversionIfNeed` (our swap) for every speaker
   stream, including USB Audio Player Pro's direct hi-res output, before the DSP, which runs
