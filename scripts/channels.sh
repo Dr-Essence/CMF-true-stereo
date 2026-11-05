@@ -121,6 +121,41 @@ stereo_staged() {
   [ -f "$OV_ETC/aurisys_config_rv.xml" ]
 }
 
+# Is this phone's audio stack the build the patch was made for?
+#   build_known -> 0 yes, 1 a different build (a Nothing OS update), 2 not a
+#   CMF Phone 1 audio stack at all.
+# Before Magisk mounts (post-fs-data) the files read are the vendor's own, so
+# only the stock hashes match there; later the running view may also be our
+# stereo files, which are this build too.
+build_known() {
+  for _n in $HAL_NAMES; do
+    _f=$(_view "$HAL_DIR/$_n")
+    [ -f "$_f" ] || return 2
+    case $(_sha "$_f") in
+      "$HAL_STOCK"|"$HAL_STEREO"|"$HAL_STEREO_V1") ;;
+      *) return 1 ;;
+    esac
+  done
+  case $(_sha "$(_view "$AUR")") in
+    "$AUR_STOCK"|"$AUR_STEREO"|"$AUR_TEST") return 0 ;;
+  esac
+  return 1
+}
+
+# The answer for this boot, kept for the status and the Magisk description:
+# known | updated | absent.
+BUILD_STATE=$DATADIR/build_state
+build_check() {
+  build_known
+  case $? in 0) _b=known ;; 2) _b=absent ;; *) _b=updated ;; esac
+  echo "$_b" > "$BUILD_STATE"
+  echo "$_b"
+}
+build_state() {
+  _b=$(cat "$BUILD_STATE" 2>/dev/null)
+  echo "${_b:-known}"
+}
+
 # stage_stereo -> 0 when the overlay is in place; prints the reason otherwise
 stage_stereo() {
   _tmp=$DATADIR/stage.$$

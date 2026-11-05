@@ -21,7 +21,8 @@ speaker, the bottom speaker the right — no custom kernel, just root.
 ### Install in three steps
 
 1. Flash the zip in **Magisk / KernelSU / APatch** and reboot.
-2. Open **CMF Stereo** and pick **Stereo** — or in a terminal: `su -c stereoctl channels stereo`.
+2. Open **CMF Stereo** and pick **Stereo**, or tap **Action** on the module's card in Magisk,
+   or in a terminal: `su -c stereoctl channels stereo`.
    It switches at once (the sound stops for a moment; press play again).
 3. Turn the phone sideways either way: left and right follow the screen.
 
@@ -40,9 +41,10 @@ nothing.
 
 ## Status
 
-**Current release: v0.9.7** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
+**Current release: v0.9.8** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
 in daily use on the test phone. Mono and Stereo switch without a reboot, left and right
-follow the phone's orientation, and Magisk offers new releases as updates.
+follow the phone's orientation, and Magisk offers new releases as updates. v0.9.8 adds the
+Action button, a live state line on the module's card, and a guard for Nothing OS updates.
 
 **Verified on the phone**
 - Magisk's Update button: with v0.9.6 installed, Magisk showed **Update** for this module
@@ -70,6 +72,18 @@ follow the phone's orientation, and Magisk offers new releases as updates.
 - Hi-res playback (USB Audio Player Pro, Direct 192 kHz) still works in stereo.
 
 **Not tested on a phone yet**
+- v0.9.8 Action button: Magisk's **Action** on the module's card switches Mono <-> Stereo
+  through `stereoctl channels` and prints its output. Checked: the script parses under
+  dash, mksh and busybox and is packaged; not yet pressed on the phone.
+- v0.9.8 live description: the card's first words say `[Stereo]`, `[Mono]`, `[Off]`, a switch
+  waiting for a reboot, a daemon that is not running, or `[Stereo unavailable]` after a
+  Nothing OS update. Covered by the tests (state text, one line, file left alone when nothing
+  changed); needs a look on the phone after a switch and after a reboot.
+- v0.9.8 Nothing OS update guard: before Magisk mounts, a staged stereo overlay is removed
+  (mono) if the vendor audio files are not the analysed build, instead of mounting a HAL
+  patched from the old build over the new one; the card and `stereoctl status` then say
+  stereo is unavailable. Tested on fake vendor files (different HAL, different DSP config,
+  missing HAL); seen on the phone only with the next Nothing OS update.
 - The orientation swap with Nothing's Dirac switched off: apps on the primary output are then
   not swapped (known limit; nothing swaps them).
 - Live switching from the app's Mono/Stereo buttons (needs the next app build).
@@ -83,6 +97,15 @@ follow the phone's orientation, and Magisk offers new releases as updates.
 - How the speaker holds up to long, loud stereo listening without Awinic's protection.
 
 **Pending**
+- Speaker limiter, earpiece boost and EQ (asked for; design stage). Where it can run: the
+  HAL's playback path calls `doStereoToMonoConversionIfNeed` (our swap) for every speaker
+  stream, including USB Audio Player Pro's direct hi-res output, before the DSP, which runs
+  MediaTek's pass-through `aurisys_demo` in stereo. An Android audio effect from the app would
+  miss direct outputs, so a limiter meant to protect the speaker has to sit in the HAL path.
+  Needs, before any build: whether the host-side Aurisys step after it
+  (`aurisys_process_dl_only` in `AudioALSAPlaybackHandlerDsp::write`) adds gain, and the
+  user's bass tests (Mono vs Stereo, STEREO_ATTEN_DB 6 vs 12).
+- Balance: already there as the app's two levels (earpiece level, speaker level in stereo).
 - Hardware checked (I2C devices, driver bindings, mixer, HAL): one Awinic amp at `6-0034`
   (mono output, speaker only); the earpiece is on the codec's left DAC, which takes only
   channel 1; the codec's earpiece amp is at its top step (+8 dB) and the digital path has
@@ -98,6 +121,8 @@ follow the phone's orientation, and Magisk offers new releases as updates.
 - `ADDA_DL_MAX_VOL` was tried for a louder earpiece: no clear difference, left out.
 
 **Fixed recently**
+- v0.9.8: after a Nothing OS update the old stereo overlay (patched from the previous build)
+  would still have been mounted over the new vendor files; only two failed boots removed it.
 - v0.9.7: the module was still listed in Magisk as by Tiimoo-debug; it now says Dr.Essence.
 - v0.9.6: Magisk showed an out-of-date module description (Stereo "needs a reboot").
 - v0.9.5: turned with the earpiece on your right, left and right came out reversed.
@@ -155,8 +180,11 @@ Verified on **A015 / Tetris, MT6878, Nothing OS B4.1, Android 16.**
 - Steps aside for headphones and Bluetooth
 - Restores every control it touches on stop, disarm or uninstall
 - Disarms itself if it ever causes a failed boot
-- Switch modes with `stereoctl channels mono|stereo` or the app; the stereo
-  overlay removes itself after two failed boots
+- Switch modes with `stereoctl channels mono|stereo`, the app, or the Action button on
+  the module's card in Magisk / KernelSU / APatch; the stereo overlay removes itself after
+  two failed boots
+- Says on the module's card what is running: `[Stereo]`, `[Mono]`, `[Off]`, or
+  `[Stereo unavailable]` after a Nothing OS update
 
 ## What it does not do
 
@@ -297,7 +325,9 @@ stereoctl channels stereo     # switch to stereo now
 stereoctl channels mono       # back to stock now
 ```
 
-The CMF Stereo Manager app has the same switch.
+The CMF Stereo Manager app has the same switch, and so does the **Action** button on the
+module's card in Magisk (28 or newer), KernelSU and APatch: each press switches to the
+other mode and shows `stereoctl channels`' output.
 
 **Switching without a reboot** (v0.9.4). The module restarts the audio HAL
 (`setprop ctl.restart vendor.audio-hal`) on the wanted files instead of
@@ -519,6 +549,13 @@ structural check — balanced `<module>`, `<mixPort>`, `<devicePort>` and
 `<route>` elements, intact root tag, no stray backslashes from a bad
 insertion. Android has no `xmllint`, and a malformed audio policy takes
 `audioserver` down hard enough to loop the boot.
+
+**Nothing OS updates.** An update replaces the vendor audio files the stereo
+overlay was patched from. Before anything is mounted at boot, `post-fs-data.sh`
+checks the vendor files against the analysed build; if they differ, the stereo
+overlay is removed and the phone boots on stock mono. The module's card and
+`stereoctl status` (`build: updated`) then say stereo is unavailable until a
+module release supports the new build.
 
 **Manual recovery**, if you ever need it:
 

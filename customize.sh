@@ -103,6 +103,7 @@ echo 0 > "$DATADIR/boot_pending"
 set_perm_recursive "$MODPATH" 0 0 0755 0644
 set_perm_recursive "$MODPATH/scripts" 0 0 0755 0755
 set_perm "$MODPATH/system/bin/stereoctl" 0 0 0755
+set_perm "$MODPATH/action.sh" 0 0 0755
 chmod 0700 "$DATADIR" 2>/dev/null
 
 ##############################################################################

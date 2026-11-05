@@ -27,7 +27,12 @@ chmod 0755 "$MODDIR/scripts/"*.sh "$MODDIR/scripts/stereoctl" 2>/dev/null
 
 # Keep a hash-checked copy of the stock audio files (copied when booted mono,
 # rebuilt from the stereo files when booted stereo), so stereo can be switched
-# back to mono without a reboot.
-(save_stock || log info "stock audio files not saved (not the analysed build?)") &
+# back to mono without a reboot. Then note whether this is the analysed build (the description and the app
+# say so when a Nothing OS update made it a different one).
+(
+  save_stock || log info "stock audio files not saved (not the analysed build?)"
+  [ "$(build_check)" = updated ] && log warn "this Nothing OS build is not supported yet - stereo is unavailable, mono runs"
+  update_description boot
+) &
 
 nohup "$MODDIR/scripts/stereo-daemon.sh" >/dev/null 2>&1 &

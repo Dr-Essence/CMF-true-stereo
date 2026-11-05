@@ -505,6 +505,18 @@ cp "$K/cur.so" "$HAL_DIR/audio.primary.mt6878.so"; rm -f "$STOCKDIR/audio.primar
 check "current stereo, no stock copy: no copy kept" "$(save_stock || echo refused; [ -f "$STOCKDIR/audio.primary.mt6878.so" ] && echo kept)" "refused"
 echo junk > "$HAL_DIR/audio.primary.mt6878.so"
 check "unknown file: no copy kept" "$(save_stock || echo refused; [ -f "$STOCKDIR/audio.primary.mt6878.so" ] && echo kept)" "refused"
+# Nothing OS updates: anything but the analysed build is "updated".
+check "build: a different HAL is an update" "$(build_check)" "updated"
+cp "$K/stock.so" "$HAL_DIR/audio.primary.mt6878.so"; cp "$K/stock.so" "$HAL_DIR/audio.primary.mediatek.so"
+check "build: the stock files are known" "$(build_check)" "known"
+check "build: kept for the status" "$(build_state)" "known"
+cp "$K/cur.so" "$HAL_DIR/audio.primary.mt6878.so"
+check "build: our stereo HAL is this build too" "$(build_check)" "known"
+cp "$K/stock.xml" "$K/upd.xml"; echo '<!-- new build -->' >> "$K/upd.xml"; _OA2=$AUR; AUR=$K/upd.xml
+check "build: a different DSP config is an update" "$(build_check)" "updated"
+AUR=$_OA2; mv "$HAL_DIR/audio.primary.mediatek.so" "$K/away.so"
+check "build: no MediaTek HAL is not this phone" "$(build_check)" "absent"
+mv "$K/away.so" "$HAL_DIR/audio.primary.mediatek.so"; rm -f "$BUILD_STATE"
 HAL_DIR=$_OHAL_DIR; AUR=$_OAUR; HAL_STOCK=$_OHS; HAL_STEREO=$_OHX; HAL_STEREO_V1=$_OHV1; AUR_STOCK=$_OAS; AUR_STEREO=$_OAX; LIVE_ROOT=$_OLR; STOCKDIR=$_OSD
 
 echo "live switching"
@@ -614,6 +626,26 @@ STUB
 else
   echo "  skip - bind mounts need root"
 fi
+
+echo "magisk description"
+MODPROP=$TMP/module.prop; cp "$ROOT/module.prop" "$MODPROP"
+update_description
+_desc=$(grep '^description=' "$MODPROP")
+check "one description line" "$(grep -c '^description=' "$MODPROP")" "1"
+check "other lines kept" "$(grep -c '^author=Dr.Essence$' "$MODPROP")" "1"
+case $_desc in "description=[Mono] Both speakers play the full mix. Not running: restart it in the app. Real left/right"*) ok "mono, daemon down" ;; *) bad "mono description ($_desc)" ;; esac
+update_description boot
+case $(grep '^description=' "$MODPROP") in "description=[Mono] Both speakers play the full mix. Real left/right"*) ok "at boot the daemon is not judged yet" ;; *) bad "boot description" ;; esac
+touch "$KILLSWITCH"; update_description
+case $(grep '^description=' "$MODPROP") in "description=[Off]"*) ok "disarmed" ;; *) bad "disarmed description" ;; esac
+rm -f "$KILLSWITCH"
+echo updated > "$BUILD_STATE"; update_description
+case $(grep '^description=' "$MODPROP") in "description=[Stereo unavailable]"*) ok "after a Nothing OS update" ;; *) bad "update description" ;; esac
+rm -f "$BUILD_STATE"
+update_description boot; cp -p "$MODPROP" "$TMP/before.prop"; sleep 1; update_description boot
+check "unchanged state, file untouched" "$([ ! "$MODPROP" -nt "$TMP/before.prop" ] && cmp -s "$MODPROP" "$TMP/before.prop" && echo same)" "same"
+check "the action script parses" "$(sh -n "$ROOT/action.sh" && echo ok)" "ok"
+check "the action script is packaged" "$(grep -c 'action.sh' "$ROOT/build.sh")" "1"
 
 echo "orientation swap (ARM64 emulator)"
 if _out=$(sh "$ROOT/hal-swap/run.sh" 2>&1); then

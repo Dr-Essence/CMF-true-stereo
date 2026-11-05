@@ -74,6 +74,7 @@ cmd_status() {
   else
     echo "channels:  $_act (switches to $_stg after reboot)"
   fi
+  echo "build:     $(build_state)"
   if [ "$_act" = stereo ]; then
     echo "amp slot:  $(amp_chsel)   attenuation: $(ctl_get "$AMP_VOL_CTL" 2>/dev/null)/8 dB (holds ${STEREO_ATTEN_DB:-6} dB)"
   fi
@@ -327,6 +328,7 @@ cmd_off() {
     echo "      amp returns to its left slot on the next stream - run"
     echo "      'stereoctl channels mono' and reboot for stock audio."
   fi
+  update_description
   echo "disarmed and reverted - controls are yours until 'stereoctl on'"
   echo "note: this survives a reboot. 'stereoctl on' to re-arm."
 }
@@ -395,6 +397,7 @@ cmd_restart() {
   _w=0
   until _p=$(daemon_pid) || [ $_w -ge 30 ]; do tick; _w=$((_w + 1)); done
   if [ -n "$_p" ]; then echo "daemon restarted (pid $_p)"; else echo "daemon did not start - check: stereoctl log"; fi
+  update_description
 }
 
 # Detect tinymix once in this shell, so the mixer helpers (which run in
@@ -429,7 +432,7 @@ case ${1:-status} in
   ctl)     shift; cmd_ctl "$@" ;;
   dump)    cmd_dump ;;
   diff)    cmd_diff "$2" ;;
-  channels) cmd_channels "$2" ;;
+  channels) cmd_channels "$2"; _rc=$?; [ -n "${2:-}" ] && update_description; exit $_rc ;;
   xml-patch)  sh "$MODDIR/scripts/xml_patch.sh" patch ;;
   xml-revert) sh "$MODDIR/scripts/xml_patch.sh" revert ;;
   -h|--help|help) usage ;;

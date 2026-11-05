@@ -24,6 +24,7 @@ on_stop() {
   revert_actions
   stereo_active && amp_set_chsel mono
   daemon_unlock
+  update_description
   exit 0
 }
 trap on_stop TERM INT
@@ -55,6 +56,7 @@ else
   # Left over from an earlier stereo boot: give the amp its own gain back.
   amp_release_atten
 fi
+update_description
 
 applied=0
 was_playing=0

@@ -31,6 +31,21 @@ if stereo_staged && [ "$(boot_strikes)" -ge 2 ]; then
   boot_strike_clear
 fi
 
+# A Nothing OS update replaces the vendor audio files. The staged stereo files
+# were patched from the old ones, so mounting them over the new build would
+# run an old HAL against new firmware and configs. Before Magisk mounts
+# anything, the vendor files read here are the vendor's own: if they are not
+# the analysed build, the stereo overlay goes and the phone stays on stock
+# mono until a module update supports the new build.
+if stereo_staged; then
+  _b=$(build_check)
+  if [ "$_b" != known ]; then
+    log warn "the vendor audio files are not the analysed build ($_b; a Nothing OS update?) - stereo overlay removed, mono"
+    unstage_stereo
+    sed -i 's/^CHANNELS=.*/CHANNELS=mono/' "$CONF" 2>/dev/null
+  fi
+fi
+
 # A daemon lock from the previous boot names a pid that no longer exists.
 rm -rf "$DATADIR/daemon.lock" "$DATADIR/daemon.pid"
 

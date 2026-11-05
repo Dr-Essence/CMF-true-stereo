@@ -469,6 +469,46 @@ stop_daemons() {
 }
 
 ##############################################################################
+# Magisk description
+#
+# Magisk, KernelSU and APatch show module.prop's description on the module's
+# card and read it again each time the Modules page opens, so the module keeps
+# its first line current: what is playing, and anything that needs the user.
+# Rewritten only when it changes.
+##############################################################################
+
+MODPROP=${MODPROP:-$MODDIR/module.prop}
+DESC_ABOUT='Real left/right stereo on the CMF Phone 1 (A015): earpiece left, bottom speaker right, swapped when the phone is turned. Mono (stock, with Awinic speaker protection) or Stereo, switched at once from the app, stereoctl or the Action button. Patches only this phone'"'"'s verified vendor files; back to mono after two failed boots.'
+
+describe_state() {
+  case $(build_state) in
+    updated) echo "[Stereo unavailable] This Nothing OS build is not supported yet: mono (stock audio) until a module update adds it." ; return ;;
+    absent)  echo "[Inactive] Not a CMF Phone 1 audio stack: nothing is changed." ; return ;;
+  esac
+  if ! module_active; then
+    echo "[Off] Earpiece not used. Turn on in the app or with stereoctl on."
+    return
+  fi
+  if stereo_active; then _d="[Stereo] Earpiece left, speaker right."
+  else _d="[Mono] Both speakers play the full mix."; fi
+  _stg=mono; stereo_staged && _stg=stereo
+  _act=mono; stereo_active && _act=stereo
+  [ "$_act" != "$_stg" ] && _d="$_d Switches to $_stg after a reboot."
+  [ "${1:-}" = boot ] || daemon_pid >/dev/null || _d="$_d Not running: restart it in the app."
+  echo "$_d"
+}
+
+# update_description [boot]   (boot: from service.sh, before the daemon is up)
+update_description() {
+  [ -w "$MODPROP" ] || return 0
+  _line="description=$(describe_state "${1:-}") $DESC_ABOUT"
+  # Keep the result a single line sed can take: no newline, | or &.
+  _line=$(printf '%s' "$_line" | tr -d '\n|&\\')
+  grep -qxF "$_line" "$MODPROP" && return 0
+  sed -i "s|^description=.*|$_line|" "$MODPROP" 2>/dev/null
+}
+
+##############################################################################
 # XML sanity
 #
 # There is no xmllint on Android, and a malformed audio policy takes the audio
