@@ -31,9 +31,10 @@ nothing.
 
 > **Before you use stereo**
 > - Stereo turns off Awinic's speaker protection for media (calls always keep
->   it). To make up for it, the speaker is held **6 dB below the amp's full
->   output** at its loudest (app speaker level 10), and each level down takes
->   2 dB more, to 24 dB at level 1. Use **Mono** for loud listening.
+>   it). The module's own protection stands in: the speaker is held **6 dB
+>   below the amp's full output** at its loudest (app speaker level 10, 2 dB
+>   more per level down), its deepest bass is held back when it gets loud, and
+>   the earpiece is kept from clipping. Use **Mono** for loud listening.
 > - If the phone fails to boot twice in a row with stereo on, the module
 >   removes stereo on its own and falls back to Mono.
 >
@@ -41,242 +42,60 @@ nothing.
 
 ## Status
 
-**Current release: v1.0.4** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
-in daily use on the test phone. Mono and Stereo switch without a reboot, and Magisk offers new
-releases as updates. Left and right follow the phone's orientation. Android swaps the channels
-itself at rotation 270 before the HAL (measured with the HAL's own recordings), except for an
-app whose track has its own audio effect (VLC: its recording showed the left-only beep still
-on the left at 270). v1.0.2 swaps exactly those in the HAL: the daemon reads
-`dumpsys media.audio_flinger` while something plays at rotation 270 and names the outputs that
-carry such a track in `vendor.audiohal.cmf_swap`; the HAL swaps only those, only at 270.
+**Current release: v1.0.4** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is in
+daily use on the test phone, with the module's own protection running in the audio HAL (deep
+bass guard, earpiece limiter, optional speaker boost). Mono and Stereo switch without a reboot,
+and Magisk offers new releases as updates. Left and right follow the phone's orientation for
+every way apps play sound on this phone. "While playing" engages the earpiece for games and
+music alike. The full history of findings, tests and fixes is in [CHANGELOG.md](CHANGELOG.md).
 
 **Verified on the phone**
-- v1.0.4 stereo protection: `stereoctl protect` reports it running after the first sound
-  (the HAL loaded the library), and every setting was tried and works. Seen: speaker level 5
-  (16 dB attenuation), boost 0, bass strong, earpiece on -> ceilings speaker off, bass -4 dBFS
-  (-20 dB below the amp's full output), earpiece -2.5 dBFS, as designed.
-- What "While playing" (MODE=playback) can watch, measured with the DSP's task switches
-  logged each second: idle, nothing; a game, `dsp_fast_runtime_en`; a music player,
-  `dsp_music_runtime_en` with `dsp_primary_runtime_en` (`dsp_deepbuf_runtime_en` for a moment);
-  stopped, nothing; `dsp_playback_runtime_en` and `aw_dev_0_switch` stay on throughout.
-- v1.0.2: VLC and the CMF L/R Test app's MOVIE + EFFECT button follow the rotation (the
-  left-only file plays on the side of the earpiece or speaker it should), and USB Audio Player
-  Pro in bit-perfect mode, and the CMF L/R Test app's AAUDIO (low latency, exclusive, as a
-  game asks), AAUDIO SHARED and FLOAT buttons. On the speaker AAudio cannot get the direct
-  MMAP path (`mmap_no_irq_out` lists only the earpiece and wired headsets), so low-latency
-  games play through Android's mixer, which swaps them.
-- Compressed offload (MP3 decoded by the DSP): Android refuses it on this phone
-  (`AudioManager.isOffloadedPlaybackSupported` false for MP3 on the speaker), so music
-  players do not use that path here. Likely reason, not yet proven: the audio policy refuses
-  offload while a non-offloadable effect is on, and Nothing's Dirac (flags 0x280, no offload
-  support) is on for the output mix. One check would settle it: Dirac off, COMPRESSED again.
-- v1.0.1: the CMF L/R Test app's four buttons (MUSIC, MOVIE, GAME, SPEECH) and InShot follow
-  the rotation; VLC does not (it plays the same side whichever way the phone is turned).
-- v0.9.9 orientation swap by Dirac's tuning: the left-only file in USB Audio Player Pro
-  (Android driver; Dirac MUSIC) and VLC (Dirac MOVIE), earpiece on either side: both right.
-- v0.9.9 Action button: switching Mono and Stereo from Magisk works; the audio service kept
-  running (v0.9.8 crashed it on the switch to Stereo). One try left UAPP crashing once; it
-  did not happen again.
-- VLC added to Nothing's Game mode (game dashboard): still right with the earpiece on either
-  side, but Dirac's tuning stayed MOVIE (`persist.vendor.newdirac.cur.config`), so this did
-  not test Dirac's GAME tuning: that comes only from the game list built into
-  `com.nothing.audioeffect` (125 apps, mostly Tencent titles), not from Game mode.
-- v0.9.9 orientation swap in apps and games: YouTube (on Nothing's video list, Dirac MOVIE:
-  the module swaps) follows the rotation, and a game (The Amazing Spider-Man 2, 64-bit port,
-  on no list: Dirac MUSIC) switches sides when turned (checked by ear in the game only).
-- Magisk's Update button: with v0.9.6 installed, Magisk showed **Update** for this module
-  once v0.9.7 was out and `update.json` named it (before that it rightly showed none).
-- Updating from that button to v0.9.7 and rebooting: the module is now listed as v0.9.7 by
-  Dr.Essence.
-- v0.9.5 orientation swap: the left-only test file in VLC (deep-buffer output) and in USB Audio
-  Player Pro (primary output, where Nothing's Dirac does the swap): earpiece on your left, the
-  earpiece plays; on your right, the speaker plays. (Then UAPP played on the primary output
-  in Dirac's MUSIC tuning; v0.9.9 replaced the output rule, see Fixed.)
-- v0.9.8 Action button, live card text and Update button: Action switched Mono, the card
-  showed v0.9.8 by Dr.Essence. Action's switch back to Stereo crashed the audio service
-  (fixed in v0.9.9).
-- v0.9.4 live switching: Mono -> Stereo -> Mono -> Stereo with `stereoctl channels`, no reboot,
-  each checked with the left-only test file (speaker silent in Stereo, both play in Mono).
-  The first two builds refused it safely (no stock copy; then mounting over the deleted
-  files Magisk had mounted), which is what the final design fixed.
-- v0.9.4 kernel log: boot messages intact, one `aw882xx_volume_put` at boot instead of a
-  `volume_get` line every cycle.
-- Stereo: a left-only test file leaves the speaker silent on its right slot and plays on the
-  earpiece, with Nothing's Dirac tuning on and off.
-- Mono and stereo switching through `stereoctl channels` and the app, with a reboot.
-- Restarting the audio HAL by hand (`setprop ctl.restart vendor.audio-hal`) while playing:
-  the HAL came back, players paused, calls worked.
-- One daemon per boot (three were starting before v0.9.1).
-- Earpiece at +8 dB (`Handset Volume 0`) while playing; the old 31 is corrected on install.
-- Hi-res playback (USB Audio Player Pro, Direct 192 kHz) still works in stereo.
+- Stereo: a left-only file plays on the earpiece only, the speaker's right slot silent, with
+  Dirac on and off. Mono: both play the full mix.
+- Switching Mono and Stereo at once (audio HAL restart, no reboot) from `stereoctl channels`,
+  both apps and Magisk's Action button; Magisk's Update button.
+- Left and right follow the rotation: ordinary apps and music players (USB Audio Player Pro,
+  bit-perfect too), InShot, YouTube, games, VLC (its own audio effect: swapped by the HAL,
+  v1.0.2), and the CMF L/R Test's MUSIC, MOVIE, MOVIE + EFFECT, GAME, SPEECH, AAUDIO, AAUDIO
+  SHARED and FLOAT buttons.
+- "While playing" (v1.0.3): games (`dsp_fast`) and music players (`dsp_music`, `dsp_primary`)
+  both engage the earpiece.
+- Protection (v1.0.4): `stereoctl protect` reports it running after the first sound, and
+  every setting was tried and works (ceilings as designed, e.g. speaker level 5, bass strong:
+  -4 dBFS on the signal, -20 dB below the amp's full output).
+- Earpiece at the receiver amp's top step (+8 dB); hi-res playback still works in stereo.
 
 **Not tested on a phone yet**
-- **v1.0.4 stereo protection** (`stereoctl protect`, both apps): the stereo HAL loads the
-  module's library (`/vendor/lib64/hw/libcmfstereo.so`, `protect/cmfstereo.c`) and runs, on
-  every speaker buffer after the rotation swap: the speaker's bass guard (the band below
-  100 Hz held at -8 / -14 / -20 dB below the amp's full output, only when louder; default
-  medium), a speaker peak limiter that keeps the peaks at Awinic's measured -5 dB when the
-  speaker boost (0-6 dB less fixed attenuation, default 0) is used, and an earpiece limiter at
-  -2.5 dBFS (on by default). Needs on the phone: that the HAL loads it (`stereoctl protect`
-  says running after the first sound), Stereo sounding the same at boost 0 apart from the
-  loudest deep bass, and a listen at boost 6. Tested here: the library's 20 host tests
-  (bit-exact when nothing is set, the swap as before, limiters never above their ceilings,
-  quiet bass unchanged within 0.3 dB from 30 Hz to 5 kHz, limiter distortion at most 1.2 %
-  at 50 Hz and under 0.1 % above 1 kHz, 12 streams, null inputs); the NDK build (needs only
-  libc, libm, libdl; rebuilds byte for byte); the HAL patch in the ARM64 emulator (24 cases:
-  loaded once, called with the HAL's arguments, a failed load not retried and the swap alone
-  run instead); every earlier stereo HAL (v0.9.0-v1.0.3) converting to the v1.0.4 file and
-  undoing to stock on the real file; settings, boost rules, amp handling and the crash-loop
-  guard in 190 checks under sh, dash, mksh and busybox. After a live switch from a mono boot
-  the library is not in place until a reboot: stereo then plays as v1.0.3, boost ignored.
-- **v1.0.3** "While playing" with a game and with a music player: the earpiece should now
-  engage for both (before, only for music players). Tested here: the detector on stub
-  controls under sh, dash, mksh and busybox (a game turning on only `dsp_fast` counts as
-  playing; all off, not playing; none readable, the procfs fallback), and the config line
-  the installer writes, sourced by mksh.
-- **v1.0.2**: an app with its own effect in another category (music, game) and an app with no
-  effect after VLC (UAPP) in both orientations; only VLC and MOVIE + EFFECT were tried. Not
-  yet checked: compressed offload with Dirac off (the one case where Android might grant
-  it; the module does not swap compressed audio). Each needs
-  the left-only file played that way, earpiece on your right. Tested here: the HAL patch in an
-  ARM64 emulator (18 cases), the bytes and branch against the assembled code, every earlier
-  stereo HAL (v0.9.0-v1.0.1) converting to v1.0.2 and undoing to the exact stock hash on the
-  real stock file, the detector on two real `dumpsys media.audio_flinger` captures, 156 checks
-  under sh, dash, mksh and busybox.
-- v0.9.8 Action button: Magisk's **Action** on the module's card switches Mono <-> Stereo
-  through `stereoctl channels` and prints its output. Checked: the script parses under
-  dash, mksh and busybox and is packaged; not yet pressed on the phone.
-- v0.9.8 live description: the card's first words say `[Stereo]`, `[Mono]`, `[Off]`, a switch
-  waiting for a reboot, a daemon that is not running, or `[Stereo unavailable]` after a
-  Nothing OS update. Covered by the tests (state text, one line, file left alone when nothing
-  changed); needs a look on the phone after a switch and after a reboot.
-- v0.9.8 Nothing OS update guard: before Magisk mounts, a staged stereo overlay is removed
-  (mono) if the vendor audio files are not the analysed build, instead of mounting a HAL
-  patched from the old build over the new one; the card and `stereoctl status` then say
-  stereo is unavailable. Tested on fake vendor files (different HAL, different DSP config,
-  missing HAL); seen on the phone only with the next Nothing OS update.
-- v0.9.9: a failed live switch ending on the stock files (tested on bind mounts over a
-  Magisk-style skeleton; no failure has happened on the phone since).
-- Live switching from the app's Mono/Stereo buttons.
-- v0.9.3: on/off speed and the lighter daemon. Passes the test suite under mksh (Android's
-  shell), dash and busybox; needs a check on the phone: `time su -c stereoctl off`, then
-  `time su -c stereoctl on`, and the earpiece still engaging when audio starts.
-- The boot watchdog removing the stereo overlay after two failed boots (no failed boot has
-  happened to trigger it).
-- Re-staging stereo during a module update, and the refusal on a different Nothing OS build
-  (needs the next OTA).
-- How the speaker holds up to long, loud stereo listening without Awinic's protection.
+- Boost 6 over a longer listen (it was tried briefly with the other settings).
+- The protection after a live switch from a mono boot: by design it starts only after a
+  reboot (the library is not in place until then; stereo plays as v1.0.3, boost ignored).
+- The safety nets that need a failure: the crash-loop guard (3 audio HAL restarts within a
+  minute in stereo -> mono), the boot watchdog (two failed boots -> mono), a failed live
+  switch ending on the stock files. Each is covered by the tests on fake files.
+- The next Nothing OS update: the guard that turns stereo off for an unknown build, and
+  re-staging during a module update.
+- How the speaker holds up to long, loud stereo listening.
 
 **Pending**
-- If an app with its own effect and an ordinary app play on the same output at the same time,
-  one of them is reversed at rotation 270 (the HAL sees only the mixed stream). Not seen yet.
-- Earpiece boost, measured: there is no hidden attenuation to win back. The HAL's own
-  recordings (CMF L/R Test FULL CHECK) show the beep at the same level from Android's output
-  to the HAL (-8.7 dBFS, the test file's own level at full volume) and through the audio DSP
-  (-56.9 in the DSP's 8.24 fixed-point dump, the same -8.7 dBFS), then `ADDA_DL_GAIN` -0.3 dB
-  and the receiver amp at its top step (+8 dB). A louder earpiece therefore needs either more
-  average power or a different spread of frequencies; the option without any EQ is a leveller
-  whose peaks never exceed today's full-scale peaks (more for quiet, dynamic recordings, little
-  for already loud masters).
-- Driver study, stereo part (CMF L/R Test DRIVER STUDY, measured with the HAL's raw 24-bit
-  microphone capture, levels taken from the HAL's copy of what reached it):
-  - Dirac (MUSIC) shapes the tones before the drivers: about +2 dB at 150 Hz, +5 to +6 dB at
-    200-500 Hz, -2 to -4 dB at 3-5 kHz, a limiter holding peaks at about -0.2 dBFS, and a
-    second harmonic at -16 dB on 100 Hz (bass enhancement). Above 150 Hz what reaches the
-    drivers is clean (under 0.1 % distortion).
-  - Earpiece: under about 5-10 % distortion up to about -3 dBFS from 150 Hz up; in the top
-    1.5 dB it clips (odd harmonics jump to 25-35 % at 150, 200 Hz and 2 kHz).
-  - Speaker (Awinic off, stereo): distortion grows steadily with level from about -12 dBFS,
-    mostly odd harmonics, to about 27 % at -3 dBFS at 1.2-2 kHz (both microphones agree on the
-    trend).
-  - Pending: the Mono part (Awinic on) for the same tones, to compare.
-- Speaker limiter, earpiece boost and EQ (asked for; design stage). Where it can run: the
-  HAL's playback path calls `doStereoToMonoConversionIfNeed` (our swap) for every speaker
-  stream, including USB Audio Player Pro's direct hi-res output, before the DSP, which runs
-  MediaTek's pass-through `aurisys_demo` in stereo. An Android audio effect from the app would
-  miss direct outputs, so a limiter meant to protect the speaker has to sit in the HAL path.
-  Needs, before any build: whether the host-side Aurisys step after it
-  (`aurisys_process_dl_only` in `AudioALSAPlaybackHandlerDsp::write`) adds gain, and the
-  user's bass tests (Mono vs Stereo, STEREO_ATTEN_DB 6 vs 12).
-- Balance: already there as the app's two levels (earpiece level, speaker level in stereo).
-- Hardware checked (I2C devices, driver bindings, mixer, HAL): one Awinic amp at `6-0034`
-  (mono output, speaker only); the earpiece is on the codec's left DAC, which takes only
-  channel 1; the codec's earpiece amp is at its top step (+8 dB) and the digital path has
-  about 0.3 dB left. Ideas under consideration: an earpiece boost (high-pass, compressor and
-  limiter on the earpiece channel through Android's DynamicsProcessing, in the app), and a
-  mono speaker fallback when the phone is turned with the earpiece on the right (a true
-  left/right swap would need the channels swapped in the stream: a bigger project).
-- Which stereo speaker level sounds as loud as stock (Mono, with Awinic's protection): needs a
-  by-ear comparison on the phone, level by level, with the same track.
-- A short clip of the earpiece and speaker splitting a game's or film's audio, for the README
-  and the release page.
-- Check the vendor file hashes after the next Nothing OS update and add the new build.
-- `ADDA_DL_MAX_VOL` was tried for a louder earpiece: no clear difference, left out.
+- After the next Nothing OS update: check the vendor file hashes and add the new build.
+- Earpiece leveller (optional, not built): raises the earpiece's quiet and medium passages,
+  peaks never above today's, no frequency changed.
+- Known limit: an app with its own audio effect (VLC) and an ordinary app playing on the same
+  output at once, earpiece on the right: one of them is reversed (the HAL sees only the mix).
+- Compressed offload: Android refuses it on this phone (Dirac is on for the output mix), so
+  apps never use it here; not worth testing further.
+- A short clip of the two drivers splitting a game's or film's audio, for this page.
 
 **Fixed recently**
-- v1.0.4: in stereo the speaker got up to about 10 dB more deep bass (100 Hz) than Awinic
-  lets through in mono, with no protection but the fixed attenuation, and the earpiece clipped
-  in its top 1.5 dB (DRIVER STUDY). The bass guard and the earpiece limiter hold both, and a
-  crash-loop guard puts the phone back on the stock files (mono) if the audio HAL restarts 3
-  times within a minute in stereo.
-- v1.0.3: in "While playing" (the default, and the only mode the clean app has) games and
-  most apps that are not music players played on the speaker only: playback was detected
-  from `dsp_music_runtime_en`, the DSP's music task alone, and a game plays through its fast
-  task. Playback now counts when any DSP playback task is on (music, fast, primary, deep
-  buffer, VoIP, offload); `PLAYBACK_CTL` takes several controls separated by `|`. Updates
-  rewrite the setting, so installed phones get it without touching anything.
-- v1.0.2: VLC did not follow the rotation in v1.0.1. Measured: the CMF L/R Test app's MOVIE
-  button with a Dynamics Processing effect on its own session (what VLC does) reached the HAL
-  unswapped at rotation 270 (the beep stayed left), the same button without it swapped. The
-  HAL now swaps only the outputs carrying such a track (see the top of Status).
-- v1.0.1: v1.0.0 played reversed in both orientations. Measured with the HAL's own recordings
-  (`vendor.streamout.pcm.dump`, CMF L/R Test FULL CHECK): a left-only beep reaches the HAL on
-  the right channel at rotation 270 and on the left at 90, in all four Dirac tunings, and from
-  USB Audio Player Pro: Android already swaps it. The module's swap undid that; the
-  `libaudioflinger.so` patch was loaded (checked in audioserver's own mappings) and changed
-  nothing. Both are gone: stereo is again the v0.9.0-v0.9.4 HAL patch.
-- v1.0.0 (wrong, replaced by v1.0.1): it patched the speaker swap in `libaudioflinger.so`, on
-  the reading that Android's mixer caused the doubled swap; the HAL recordings later showed
-  the swap still happening with that patch loaded.
-- v0.9.9: the Action button's switch to Stereo crashed the audio service until a reboot.
-  Magisk starts `action.sh` as `./action.sh`, so the module folder was "."; the stereo file
-  was then mounted from `./system/...` resolved at init's root, i.e. `/vendor/...` itself:
-  Magisk's empty placeholder (Magisk 31 builds `/vendor/lib64/hw` as a tmpfs skeleton).
-  The failed switch then took the module's mounts off and restarted the HAL on those empty
-  files; audioserver crash-looped (`stoi: no conversion`) and `system_server` and
-  `audioserver` used a lot of CPU. Now the folder is always absolute, and a failed switch
-  mounts the checked stock copies and restarts the HAL only once all three files read back
-  as stock; otherwise it leaves the running HAL alone and asks for a reboot.
-- v0.9.9: USB Audio Player Pro played reversed with the earpiece on the right once it played
-  on the deep-buffer output. Measured: Nothing's audio service gives each app a Dirac
-  tuning (VLC is on its video list -> MOVIE; apps on no list, like UAPP -> MUSIC), and only
-  MUSIC swaps left and right with the rotation itself. The swap now follows
-  `persist.vendor.newdirac.cur.config` / `.enable.value` instead of skipping the primary
-  output.
-- v0.9.8: after a Nothing OS update the old stereo overlay (patched from the previous build)
-  would still have been mounted over the new vendor files; only two failed boots removed it.
-- v0.9.7: the module was still listed in Magisk as by Tiimoo-debug; it now says Dr.Essence.
-- v0.9.6: Magisk showed an out-of-date module description (Stereo "needs a reboot").
-- v0.9.5: turned with the earpiece on your right, left and right came out reversed.
-- v0.9.4: switching Mono and Stereo needed a reboot; it now restarts only the audio HAL.
-  From a stereo boot, the stock files are rebuilt from the stereo ones (original bytes back,
-  then hash-checked), so mono can be switched to live without ever having booted mono.
-- v0.9.4: the daemon read the amp's volume every cycle, and the Awinic driver logs each read,
-  so dmesg filled with `aw882xx_volume_get` lines (about 20 a minute) and lost the boot
-  messages.
-- v0.9.3: every mixer read started tinymix three times and every write five (its style check
-  was cached inside a subshell and thrown away), on every 2 s daemon cycle. It is now detected
-  once per process.
-- v0.9.3: on/off waited on fixed sleeps: up to 2 s for the daemon to notice the stop, 1 s
-  polling for it to exit, and a flat 2 s after restarting it. The daemon now stops the moment
-  it is told to and both waits poll in tenths of a second.
-- v0.9.3: finding the daemon started two programs for every process on the phone (several
-  hundred), at least twice per on/off. It now checks only shells and the daemon itself.
-  Measured in a test container with a running daemon: `on` 0.05 s, `off` 0.18 s.
-- v0.9.3: `stereoctl status brief` for the app, without reading every control back.
-- v0.9.2: earpiece gain was 31 (the codec's mute value), not the maximum.
-- v0.9.1: three daemons fought over the mixer; `status` reported "not running".
-- v0.9.0: true stereo: the HAL and Awinic DSP mono folds switched off in stereo mode.
+- v1.0.4: in stereo the speaker got up to about 10 dB more deep bass than Awinic lets through
+  in mono, and the earpiece clipped in its top 1.5 dB (CMF L/R Test DRIVER STUDY). The bass
+  guard and the earpiece limiter hold both; a crash-loop guard puts the stock files back if
+  the audio HAL keeps restarting in stereo.
+- v1.0.3: "While playing" watched only the DSP's music task, so games played on the speaker
+  only. It now watches every playback task.
+- v1.0.2: VLC did not follow the rotation (Android leaves a track with its own audio effect
+  unswapped); the HAL now swaps exactly those outputs.
+- Older: [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -293,7 +112,8 @@ It has two channel modes:
   the whole module once, back when it was called cmf-fake-stereo.
 - **stereo**: real left/right. The **earpiece plays the left channel and the
   speaker the right**. It costs Awinic's speaker-protection processing on
-  media, so the speaker amp is held at a fixed attenuation instead. See
+  media; the module's own protection (a fixed amp attenuation, a deep bass
+  guard and an earpiece limiter, measured against what Awinic does) stands in. See
   [Mono and stereo](#mono-and-stereo).
 
 Getting stereo took finding the two places the phone folds the speaker to
@@ -320,8 +140,10 @@ Verified on **A015 / Tetris, MT6878, Nothing OS B4.1, Android 16.**
 
 ## What it does not do
 
-- **No speaker protection on media in stereo.** Awinic's DSP processing is the
-  part that folds to mono, so stereo replaces it (see [Mono and stereo](#mono-and-stereo)).
+- **No Awinic protection on media in stereo.** Awinic's DSP processing is the
+  part that folds to mono, so stereo replaces it with the module's own, simpler
+  protection (see [Mono and stereo](#mono-and-stereo)). Its model of the
+  speaker, live from the amp's current and voltage sense, is not copied.
 - **No extra volume from the main speaker.** It is untouched.
 - **Nothing on other devices out of the box.** It installs inert elsewhere and
   ships a probe to work out that device's routing.
@@ -441,6 +263,25 @@ rejected: it also switches the HAL to a `dual_speaker_output` path that does
 not exist in this phone's `audio_device.xml`, and puts Awinic's protection
 into two-amp mode with one amp fitted.
 
+### Protection: what Awinic does, and what stereo does
+
+Measured with CMF L/R Test DRIVER STUDY (tones from 100 Hz to 8 kHz at -30 to -3 dBFS; the
+HAL's and the DSP's own recordings of what reached them, and the HAL's raw 24-bit two-microphone
+capture):
+
+| | Awinic (mono, stock) | the module in stereo |
+|---|---|---|
+| Speaker peaks | about -5 dB below the amp's full output | about -6 dB (fixed attenuation); with boost, a limiter keeps them at -5 dB |
+| 100 Hz | cut by 16 dB at every level | untouched while quiet; held at -8 / -14 / -20 dB below full output when loud (light / medium / strong) |
+| 150 Hz-3 kHz | about +3.5 dB EQ | unchanged |
+| Earpiece | (not Awinic's) clips in its top 1.5 dB of full scale | limited at -2.5 dBFS |
+
+Also measured: the speaker's resonance at about 1 kHz (from Awinic's current/voltage sense);
+Dirac (MUSIC) adds +5 to +6 dB at 200-500 Hz, a limiter at about -0.2 dBFS and a second
+harmonic on 100 Hz before either driver; the earpiece's whole path is at full level already
+(no hidden attenuation to win back). The limiters add at most 1.2 % distortion while working
+(50 Hz), under 0.1 % above 1 kHz; nothing changes while a signal is below its ceiling.
+
 ## Mono and stereo
 
 **Checksums**: every release lists the SHA-256 of its files, in the description and in
@@ -478,10 +319,11 @@ call is active, the mounts are undone and the change waits for a reboot.
 
 **What stereo changes**, and nothing else:
 
-1. **The HAL fold**: `doStereoToMonoConversionIfNeed` no longer folds to mono,
-   and the DSP task is told the speaker is stereo (`hw_info` bit `0x4`, two
-   branches). 16 bytes in three places (v0.9.5-v1.0.0 put an orientation swap
-   there; v1.0.1 writes those bytes back to stock first); the result must hash
+1. **The HAL fold**: `doStereoToMonoConversionIfNeed` no longer folds to mono;
+   it loads the module's protection library and calls it for every buffer
+   (`hal-swap/patch.S`), and the DSP task is told the speaker is stereo
+   (`hw_info` bit `0x4`, two branches). Four places; the stock bytes every
+   earlier version changed are written back first, and the result must hash
    to the tested build.
 2. **The DSP fold**: `AURISYS_SCENARIO_DSP_PLAYBACK_SMARTPA` runs
    `aurisys_demo` instead of `smartpa_awinic`. The phone's own
@@ -494,11 +336,15 @@ call is active, the mounts are undone and the change waits for a reboot.
    speaker never plays one channel alone. The driver resets the slot on every
    stream start, so the first second or two of a stream is the stock left
    slot until the daemon's next cycle.
-4. **Attenuation**: the amp is held at least `STEREO_ATTEN_DB` (default 6 dB)
-   down through its own volume control, `aw_dev_0_volume` (1/8 dB steps, per
-   the aw882xx driver). Mono gives the amp its previous value back.
+4. **Attenuation**: the amp is held `STEREO_ATTEN_DB` (default 6 dB) down
+   through its own volume control, `aw_dev_0_volume` (1/8 dB steps, per the
+   aw882xx driver), less the speaker boost while the protection runs. Mono
+   gives the amp its previous value back.
+5. **Protection** (`protect/cmfstereo.c`, `stereoctl protect`): see
+   [Protection](#protection-what-awinic-does-and-what-stereo-does) below.
 
-**No vendor file ships in this module.** Staging copies this phone's own
+**No vendor file ships in this module** (the protection library is the
+module's own code). Staging copies this phone's own
 `audio.primary.mt6878.so`, `audio.primary.mediatek.so` and
 `aurisys_config_rv.xml`, checks their SHA-256 against the analysed build,
 patches them, and checks the result against the tested one before putting it
@@ -510,11 +356,15 @@ the new build has been checked.
 **Risks, plainly:**
 
 
-- Awinic's processing is what keeps the speaker within its excursion and
-  temperature limits at high volume. In stereo, media gets only the amp's
-  hardware over-temperature / over-current cut-outs plus the attenuation. Use
-  mono for loud listening, raise `STEREO_ATTEN_DB` if you play loud in
-  stereo, and back off at the first distortion.
+- Awinic's processing keeps the speaker within its excursion and temperature
+  limits at high volume, from a live model of the speaker. In stereo, media gets
+  the amp's hardware over-temperature / over-current cut-outs, the attenuation,
+  and the module's fixed protection (peak and deep-bass limits measured against
+  Awinic's, no temperature model). Use mono for loud listening, raise
+  `STEREO_ATTEN_DB` if you play loud in stereo, and back off at the first
+  distortion.
+- If the audio HAL restarts 3 times within a minute in stereo, the daemon puts
+  the stock files back (mono) at once.
 - The earpiece has no protection in either mode (that was already true).
 - Two failed boots with the stereo overlay in place remove it and set
   `CHANNELS=mono` — the same watchdog the audio-policy overlay has.
@@ -571,6 +421,12 @@ stereoctl dump                every control and its value
 stereoctl diff [seconds]      snapshot the mixer, wait, show what changed
 
 stereoctl channels [mono|stereo]  show / choose the speaker channels (applied at once)
+stereoctl protect                 stereo protection: settings, and whether it runs
+stereoctl protect boost 0-6       speaker boost (dB less fixed attenuation, peaks still
+                                  at Awinic's level; only while the protection runs)
+stereoctl protect bass off|light|medium|strong
+                                  deep bass guard (below 100 Hz, only when loud)
+stereoctl protect earpiece on|off earpiece limiter (-2.5 dBFS)
 
 stereoctl xml-patch           install the stereo speaker-port overlay (reboot)
 stereoctl xml-revert          remove it (reboot)
@@ -587,7 +443,7 @@ Lives in `/data/adb/cmf-stereo/`, survives module updates.
 
 | file | what |
 |---|---|
-| `stereo.conf` | behaviour: mode, poll interval, log level |
+| `stereo.conf` | behaviour: mode, channels, attenuation, protection, poll interval, log level |
 | `actions.conf` | the routing itself, one action per line |
 | `stereo.log` | what the daemon did |
 | `state/` | saved original values, used to revert |
@@ -604,14 +460,19 @@ prop|<property>|<value>              set a system property
 `MODE=always` keeps it on permanently — louder in theory, harder on the
 earpiece, and it costs idle power.
 
-`PLAYBACK_CTL` / `PLAYBACK_VALUE` decide how "audio is playing" is detected.
-Empty means scan `/proc/asound` for a RUNNING substream — which **misses
-DSP-offload playback entirely**. On the CMF Phone 1 media is offloaded, so the
-procfs scan never fires and `MODE=playback` would never engage while
-`MODE=always` worked. It is set to `dsp_music_runtime_en` = `1`, found with
-`stereoctl diff`: that control flips `Off` → `On` when media starts. A named
-control that cannot be read falls back to the procfs scan rather than
-reporting "never playing" forever.
+`PLAYBACK_CTL` / `PLAYBACK_VALUE` decide how "audio is playing" is detected:
+one or more mixer controls separated by `|`, any of them reading the value
+means playing. Empty means scan `/proc/asound` for a RUNNING substream — which
+**misses DSP playback entirely**. On the CMF Phone 1 every kind of output has
+its own DSP task switch (measured, logged each second: a game turns on
+`dsp_fast_runtime_en`, a music player `dsp_music_runtime_en` with
+`dsp_primary_runtime_en`; `dsp_playback_runtime_en` stays on even when idle),
+so the installer sets all six playback tasks. Controls that cannot be read
+fall back to the procfs scan rather than reporting "never playing" forever.
+
+`SPEAKER_BOOST` (0-6, default 0), `BASS_PROTECT` (off / light / medium /
+strong, default medium) and `EARPIECE_LIMIT` (on / off, default on) set the
+stereo protection; change them with `stereoctl protect` or the apps.
 
 `GUARD_CTL` / `GUARD_VALUE` gate the routing on a mixer control's value. On
 the CMF Phone 1 the guard is `aw_dev_0_switch` = `Enable`: the HAL disables
@@ -812,28 +673,58 @@ reinstall does not lose your routing; delete it by hand for a clean slate.
 
 ## Development
 
-`tests/run-tests.sh` exercises the parts that do not need a phone — the action
-engine's save/apply/revert cycle, the boot watchdog, the XML structural
-validator, and the speaker-port rewrite (including the self-closing-element
-and no-speaker-port cases). Run it on any Linux box:
+### How a sound gets from an app to the two drivers (stereo)
 
-```sh
-sh tests/run-tests.sh
+```
+app -> Android's mixer (AudioFlinger)            swaps L/R itself at rotation 270,
+                                                 except a track with its own effect
+    -> Dirac (Nothing's tuning, session 0)
+    -> audio HAL, AudioALSAPlaybackHandlerBase   patched: hal-swap/patch.S loads
+       ::doStereoToMonoConversionIfNeed          protect/libcmfstereo.so and calls it
+         rotation swap (VLC-type outputs)        <- vendor.audiohal.cmf_swap (daemon)
+         speaker: bass guard, peak limiter       <- vendor.audiohal.cmf_*_ceil (daemon)
+         earpiece: limiter
+    -> audio DSP, aurisys_demo (pass-through)    aurisys_config_rv.xml patched
+    -> DL_24CH ch1 -> codec DAC -> earpiece      routing: config/actions.cmf1.conf
+       DL_24CH ch2 -> Awinic amp (right slot) -> speaker   amp slot/attenuation: daemon
 ```
 
-`./build.sh` packages the flashable zip.
+Measured end to end with the HAL's and the DSP's own recordings: nothing after the patched
+function changes the level, so the library's ceilings are exact.
 
-Layout:
+### Files
 
 | path | what |
 |---|---|
-| `scripts/common.sh` | action engine, tinymix handling, guard, snapshots |
-| `scripts/stereo-daemon.sh` | applies and re-asserts the routing |
-| `scripts/stereoctl` | the CLI |
+| `customize.sh` | install: device check, config kept across updates, stereo re-staged |
+| `post-fs-data.sh` | before Magisk mounts: boot watchdog, unknown-build guard |
+| `service.sh` | after boot: stock copies saved, the daemon started |
+| `action.sh` | Magisk's Action button: Mono <-> Stereo |
+| `scripts/common.sh` | config, logging, tinymix access, playback detection, the routing actions, the module card's text |
+| `scripts/channels.sh` | stereo: vendor file hashes and patches, staging, live switching, the amp, protection settings, crash-loop guard |
+| `scripts/stereo-daemon.sh` | keeps routing, amp slot, attenuation, rotation swap and protection applied while playing |
+| `scripts/stereoctl` | the CLI the apps and users call |
 | `scripts/probe.sh` | hardware dump |
 | `scripts/xml_patch.sh` | audio-policy overlay (opt-in, not for this device) |
-| `config/actions.cmf1.conf` | the verified CMF Phone 1 routing |
+| `hal-swap/` | the HAL patch in ARM64 assembly, and its emulator harness (`run.sh`) |
+| `protect/` | the protection library (`cmfstereo.c`), its host tests and reproducible NDK build (`build.sh`) |
+| `config/` | default settings and the verified CMF Phone 1 routing |
 | `bin/tinymix` | static aarch64 tinyalsa build, see `bin/README.md` |
+| `tests/` | the off-device test suite and its recorded fixtures |
+| `tools/make-test-audio.py` | makes the left-only / left-right test files |
+
+### Checks
+
+```sh
+sh tests/run-tests.sh      # 190 checks; run under sh, dash, mksh and busybox sh
+sh hal-swap/run.sh         # the HAL patch in qemu-aarch64 (needs clang, ld.lld, qemu)
+sh protect/build.sh        # the library rebuilds byte for byte (needs the NDK)
+./build.sh                 # the flashable zip
+```
+
+Every vendor file is patched only after its hash proves it is the analysed build, and the
+result is hashed again; `hal-swap/run.sh` checks the bytes `channels.sh` writes against the
+assembled patch.
 
 ---
 

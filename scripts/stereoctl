@@ -40,6 +40,7 @@ stereoctl - CMF Phone 1 stereo speaker control
                       stereo = earpiece left, speaker right. Awinic's DSP
                                protection is replaced by a fixed amp
                                attenuation (STEREO_ATTEN_DB, default 6 dB)
+                               and the module's own protection (below)
 
   protect             show the stereo protection settings and whether it runs
   protect boost N     speaker boost, 0-6 dB less amp attenuation (only while
