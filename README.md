@@ -48,6 +48,9 @@ Action button's switch to Stereo (it crashed the audio service), makes a failed 
 back safely, and decides the orientation swap by Nothing's Dirac tuning instead of the output.
 
 **Verified on the phone**
+- v0.9.9 orientation swap in apps and games: YouTube (on Nothing's video list, Dirac MOVIE:
+  the module swaps) follows the rotation, and a game (The Amazing Spider-Man 2, 64-bit port,
+  on no list: Dirac MUSIC) switches sides when turned.
 - Magisk's Update button: with v0.9.6 installed, Magisk showed **Update** for this module
   once v0.9.7 was out and `update.json` named it (before that it rightly showed none).
 - Updating from that button to v0.9.7 and rebooting: the module is now listed as v0.9.7 by
@@ -88,7 +91,8 @@ back safely, and decides the orientation swap by Nothing's Dirac tuning instead 
   stereo is unavailable. Tested on fake vendor files (different HAL, different DSP config,
   missing HAL); seen on the phone only with the next Nothing OS update.
 - v0.9.9 orientation swap by Dirac's tuning: needs both orientations checked with the
-  left-only file in USB Audio Player Pro (Android driver; Dirac MUSIC) and VLC (Dirac MOVIE).
+  left-only file in USB Audio Player Pro (Android driver; Dirac MUSIC) and VLC (Dirac MOVIE);
+  YouTube and a game are already confirmed (above).
   Tested in the ARM64 emulator (Dirac MUSIC and on: not swapped; MOVIE, off, or unreadable
   value: swapped or the earlier rule). Not known yet: whether the audio HAL may read
   `persist.vendor.newdirac.*` under the phone's SELinux rules (if not, the earlier rule
