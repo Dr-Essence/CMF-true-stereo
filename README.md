@@ -51,6 +51,8 @@ on the left at 270). v1.0.2 swaps exactly those in the HAL: the daemon reads
 carry such a track in `vendor.audiohal.cmf_swap`; the HAL swaps only those, only at 270.
 
 **Verified on the phone**
+- v1.0.2: VLC and the CMF L/R Test app's MOVIE + EFFECT button follow the rotation (the
+  left-only file plays on the side of the earpiece or speaker it should).
 - v1.0.1: the CMF L/R Test app's four buttons (MUSIC, MOVIE, GAME, SPEECH) and InShot follow
   the rotation; VLC does not (it plays the same side whichever way the phone is turned).
 - v0.9.9 orientation swap by Dirac's tuning: the left-only file in USB Audio Player Pro
@@ -92,18 +94,16 @@ carry such a track in `vendor.audiohal.cmf_swap`; the HAL swaps only those, only
 - Hi-res playback (USB Audio Player Pro, Direct 192 kHz) still works in stereo.
 
 **Not tested on a phone yet**
-- **v1.0.2** on the phone: VLC with the left-only file, earpiece on your right (the speaker
-  should play), and that UAPP and the test app still follow the rotation. Tested here: the HAL
-  patch in an ARM64 emulator (18 cases: swapped only at 270 on a flagged speaker output, 16-
-  and 32-bit; untouched with the property 0, on other outputs, at 90/0, on other devices,
-  float), the bytes and branch checked against the assembled code, every earlier stereo HAL
-  (v0.9.0-v1.0.1, rebuilt from the real stock file with each version's own patch) converts to
-  the v1.0.2 file and undoes to the exact stock hash, and the detector on two real
-  `dumpsys media.audio_flinger` captures from the phone (InShot playing with VLC paused: none;
-  UAPP playing: none; the same capture with VLC's track active: the deep-buffer output, 8).
-  156 checks under sh, dash, mksh and busybox. Not tested: the daemon writing the property on
-  the phone, and how quickly it follows (up to one 2 s cycle after playback starts or the
-  phone turns).
+- **v1.0.2**: an app with its own effect in another category (music, game) and an app with no
+  effect after VLC (UAPP) in both orientations; only VLC and MOVIE + EFFECT were tried. Not
+  covered by the swap and not yet checked: bit-perfect / hi-res Direct output (UAPP's hi-res
+  driver), compressed offload playback, AAudio MMAP (low-latency games) and float streams:
+  none of them goes through Android's mixer or the HAL function the module patches. Each needs
+  the left-only file played that way, earpiece on your right. Tested here: the HAL patch in an
+  ARM64 emulator (18 cases), the bytes and branch against the assembled code, every earlier
+  stereo HAL (v0.9.0-v1.0.1) converting to v1.0.2 and undoing to the exact stock hash on the
+  real stock file, the detector on two real `dumpsys media.audio_flinger` captures, 156 checks
+  under sh, dash, mksh and busybox.
 - v0.9.8 Action button: Magisk's **Action** on the module's card switches Mono <-> Stereo
   through `stereoctl channels` and prints its output. Checked: the script parses under
   dash, mksh and busybox and is packaged; not yet pressed on the phone.
