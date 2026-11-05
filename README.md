@@ -48,6 +48,11 @@ Action button's switch to Stereo (it crashed the audio service), makes a failed 
 back safely, and decides the orientation swap by Nothing's Dirac tuning instead of the output.
 
 **Verified on the phone**
+- v0.9.9 orientation swap by Dirac's tuning: the left-only file in USB Audio Player Pro
+  (Android driver; Dirac MUSIC) and VLC (Dirac MOVIE), earpiece on either side: both right.
+- v0.9.9 Action button: switching Mono and Stereo from Magisk works; the audio service kept
+  running (v0.9.8 crashed it on the switch to Stereo). One try left UAPP crashing once; it
+  did not happen again.
 - v0.9.9 orientation swap in apps and games: YouTube (on Nothing's video list, Dirac MOVIE:
   the module swaps) follows the rotation, and a game (The Amazing Spider-Man 2, 64-bit port,
   on no list: Dirac MUSIC) switches sides when turned.
@@ -90,16 +95,11 @@ back safely, and decides the orientation swap by Nothing's Dirac tuning instead 
   patched from the old build over the new one; the card and `stereoctl status` then say
   stereo is unavailable. Tested on fake vendor files (different HAL, different DSP config,
   missing HAL); seen on the phone only with the next Nothing OS update.
-- v0.9.9 orientation swap by Dirac's tuning: needs both orientations checked with the
-  left-only file in USB Audio Player Pro (Android driver; Dirac MUSIC) and VLC (Dirac MOVIE);
-  YouTube and a game are already confirmed (above).
-  Tested in the ARM64 emulator (Dirac MUSIC and on: not swapped; MOVIE, off, or unreadable
-  value: swapped or the earlier rule). Not known yet: whether the audio HAL may read
-  `persist.vendor.newdirac.*` under the phone's SELinux rules (if not, the earlier rule
-  stands: `logcat | grep "Access denied finding property"` would show it), and how games
-  (GAME) and navigation apps (SPEECH) behave.
-- v0.9.9 Action button: switching to Stereo from it (the v0.9.8 bug below), and a failed live
-  switch ending on the stock files (tested on bind mounts over a Magisk-style skeleton).
+- v0.9.9: games on Nothing's game list (Dirac GAME, e.g. PUBG Mobile) and navigation apps
+  (SPEECH): whether Dirac swaps in those tunings. Apps Nothing blacklists (Dirac off) should
+  be swapped by the module. Games that play through AAudio's MMAP path would bypass the swap.
+- v0.9.9: a failed live switch ending on the stock files (tested on bind mounts over a
+  Magisk-style skeleton; no failure has happened on the phone since).
 - Live switching from the app's Mono/Stereo buttons.
 - v0.9.3: on/off speed and the lighter daemon. Passes the test suite under mksh (Android's
   shell), dash and busybox; needs a check on the phone: `time su -c stereoctl off`, then
