@@ -488,6 +488,13 @@ printf '\037\040\003\325' | dd of="$K/hw/audio.primary.mt6878.so" bs=1 seek=2618
 printf '\037\040\003\325' | dd of="$K/hw/audio.primary.mt6878.so" bs=1 seek=1968640 conv=notrunc 2>/dev/null
 cp "$K/hw/audio.primary.mt6878.so" "$K/hw/audio.primary.mediatek.so"
 _patch_aurisys "$K/stock.xml" "$K/etc/aurisys_config_rv.xml"
+# The mixer: a stock-like file with the one branch the patch rewrites.
+mkdir -p "$K/af"; dd if=/dev/zero of="$K/afstock.so" bs=1024 count=1400 2>/dev/null
+printf '\301\004\000\124' | dd of="$K/afstock.so" bs=1 seek=1331148 conv=notrunc 2>/dev/null
+cp "$K/afstock.so" "$K/af/libaudioflinger.so"; _patch_af "$K/af/libaudioflinger.so"
+_OAF=$AF; _OAFS=$AF_STOCK; _OAFX=$AF_STEREO
+AF=$K/af/libaudioflinger.so; AF_STOCK=$(_sha "$K/afstock.so"); AF_STEREO=$(_sha "$AF")
+check "the mixer patch changes one branch (3 of its 4 bytes)" "$([ "$AF_STOCK" != "$AF_STEREO" ] && cmp -l "$K/afstock.so" "$AF" | wc -l | tr -d ' ')" "3"
 _OHAL_DIR=$HAL_DIR; _OAUR=$AUR; _OHS=$HAL_STOCK; _OHX=$HAL_STEREO; _OHV1=$HAL_STEREO_V1; _OAS=$AUR_STOCK; _OAX=$AUR_STEREO; _OLR=$LIVE_ROOT; _OSD=$STOCKDIR
 HAL_DIR=$K/hw; AUR=$K/etc/aurisys_config_rv.xml; LIVE_ROOT=; STOCKDIR=$K/stockcopy
 HAL_STOCK=$(_sha "$K/stock.so"); HAL_STEREO_V1=$(_sha "$HAL_DIR/audio.primary.mt6878.so")
@@ -498,15 +505,16 @@ cp "$K/cur.so" "$K/conv.so"; cp "$HAL_DIR/audio.primary.mt6878.so" "$K/conv.so"
 check "earlier stereo converts to the current one" "$(_unpatch_hal_v1 "$K/conv.so" && _patch_hal "$K/conv.so" && _sha "$K/conv.so")" "$HAL_STEREO"
 # v0.9.5-v0.9.8: a shorter body and another branch in the same spots; the
 # current patch covers every byte of it.
-cp "$K/stock.so" "$K/v2.so"; head -c 244 /dev/urandom | dd of="$K/v2.so" bs=1 seek=2603040 conv=notrunc 2>/dev/null
+cp "$K/stock.so" "$K/v2.so"; head -c 432 /dev/urandom | dd of="$K/v2.so" bs=1 seek=2603040 conv=notrunc 2>/dev/null
 printf '\110\214\000\024' | dd of="$K/v2.so" bs=1 seek=2459584 conv=notrunc 2>/dev/null
 printf '\037\040\003\325' | dd of="$K/v2.so" bs=1 seek=2618068 conv=notrunc 2>/dev/null
 printf '\037\040\003\325' | dd of="$K/v2.so" bs=1 seek=1968640 conv=notrunc 2>/dev/null
-check "v0.9.5-v0.9.8 stereo patches straight to the current one" "$(_patch_hal "$K/v2.so" && _sha "$K/v2.so")" "$HAL_STEREO"
+check "v0.9.5-v0.9.9 stereo patches straight to the current one" "$(_patch_hal "$K/v2.so" && _sha "$K/v2.so")" "$HAL_STEREO"
 check "rebuilt from an earlier-stereo boot" "$(save_stock && echo ok)" "ok"
 check "HAL back to the stock hash" "$(_sha "$STOCKDIR/audio.primary.mediatek.so")" "$HAL_STOCK"
 check "DSP config back to the stock hash" "$(_sha "$STOCKDIR/aurisys_config_rv.xml")" "$AUR_STOCK"
 check "calls keep smartpa_awinic" "$(grep -c smartpa_awinic "$STOCKDIR/aurisys_config_rv.xml")" "2"
+check "mixer back to the stock hash" "$(_sha "$STOCKDIR/libaudioflinger.so")" "$AF_STOCK"
 # The current stereo build is undone from the stock copy, never by guessing.
 cp "$K/cur.so" "$HAL_DIR/audio.primary.mt6878.so"; rm -f "$STOCKDIR/audio.primary.mt6878.so"
 check "current stereo, no stock copy: no copy kept" "$(save_stock || echo refused; [ -f "$STOCKDIR/audio.primary.mt6878.so" ] && echo kept)" "refused"
@@ -519,17 +527,38 @@ check "build: the stock files are known" "$(build_check)" "known"
 check "build: kept for the status" "$(build_state)" "known"
 cp "$K/cur.so" "$HAL_DIR/audio.primary.mt6878.so"
 check "build: our stereo HAL is this build too" "$(build_check)" "known"
+cp "$K/afstock.so" "$K/afupd.so"; echo new >> "$K/afupd.so"; _OAF2=$AF; AF=$K/afupd.so
+check "build: a different mixer is an update" "$(build_check)" "updated"
+AF=$_OAF2
 cp "$K/stock.xml" "$K/upd.xml"; echo '<!-- new build -->' >> "$K/upd.xml"; _OA2=$AUR; AUR=$K/upd.xml
 check "build: a different DSP config is an update" "$(build_check)" "updated"
 AUR=$_OA2; mv "$HAL_DIR/audio.primary.mediatek.so" "$K/away.so"
 check "build: no MediaTek HAL is not this phone" "$(build_check)" "absent"
 mv "$K/away.so" "$HAL_DIR/audio.primary.mediatek.so"; rm -f "$BUILD_STATE"
+# Staging all four files from this build's own (stock) copies.
+_OOVH=$OV_HAL; _OOVE=$OV_ETC; _OOVA=$OV_AF
+OV_HAL=$K/ov/hw; OV_ETC=$K/ov/etc; OV_AF=$K/ov/lib64
+cp "$K/stock.so" "$HAL_DIR/audio.primary.mt6878.so"; cp "$K/stock.so" "$HAL_DIR/audio.primary.mediatek.so"
+cp "$K/afstock.so" "$AF"; rm -rf "$STOCKDIR"
+check "staged" "$(stage_stereo >/dev/null && echo ok)" "ok"
+check "staged HALs are the stereo build" "$(_sha "$OV_HAL/audio.primary.mt6878.so") $(_sha "$OV_HAL/audio.primary.mediatek.so")" "$HAL_STEREO $HAL_STEREO"
+check "staged DSP config" "$(_sha "$OV_ETC/aurisys_config_rv.xml")" "$AUR_STEREO"
+check "staged mixer is the patched one" "$(_sha "$OV_AF/libaudioflinger.so")" "$AF_STEREO"
+echo junk > "$K/afjunk.so"; _OAF3=$AF; AF=$K/afjunk.so
+check "an unknown mixer: stereo refused" "$(stage_stereo >/dev/null || echo refused)" "refused"
+AF=$_OAF3
+unstage_stereo
+check "unstaged: nothing left" "$(ls "$K/ov/hw" "$K/ov/etc" "$K/ov/lib64" 2>/dev/null | grep -c so)" "0"
+OV_HAL=$_OOVH; OV_ETC=$_OOVE; OV_AF=$_OOVA
 HAL_DIR=$_OHAL_DIR; AUR=$_OAUR; HAL_STOCK=$_OHS; HAL_STEREO=$_OHX; HAL_STEREO_V1=$_OHV1; AUR_STOCK=$_OAS; AUR_STEREO=$_OAX; LIVE_ROOT=$_OLR; STOCKDIR=$_OSD
+AF=$_OAF; AF_STOCK=$_OAFS; AF_STEREO=$_OAFX
 
 echo "live switching"
 # Real bind mounts over fake vendor files; getprop/setprop/dumpsys stand in for
 # init's audio HAL service. Needs root (mount): skipped when not available.
-L=$TMP/live; mkdir -p "$L/vendor/lib64/hw" "$L/vendor/etc" "$L/ov/hw" "$L/ov/etc" "$L/bin"
+L=$TMP/live; mkdir -p "$L/vendor/lib64/hw" "$L/vendor/etc" "$L/ov/hw" "$L/ov/etc" "$L/bin" "$L/system/lib64" "$L/ov/lib64"
+echo STOCK-AF > "$L/system/lib64/libaudioflinger.so"
+echo STEREO-AF > "$L/ov/lib64/libaudioflinger.so"
 echo STOCK-HAL > "$L/vendor/lib64/hw/audio.primary.mt6878.so"
 echo STOCK-HAL > "$L/vendor/lib64/hw/audio.primary.mediatek.so"
 printf '<aurisys_config>\n</aurisys_config>\n' > "$L/vendor/etc/aurisys_config_rv.xml"
@@ -538,12 +567,13 @@ echo STEREO-HAL > "$L/ov/hw/audio.primary.mediatek.so"
 printf '<aurisys_config>\n<!-- cmf_stereo: stereo -->\n</aurisys_config>\n' > "$L/ov/etc/aurisys_config_rv.xml"
 if mount --bind "$L/ov/hw/audio.primary.mt6878.so" "$L/vendor/lib64/hw/audio.primary.mt6878.so" 2>/dev/null; then
   umount "$L/vendor/lib64/hw/audio.primary.mt6878.so"
-  echo 100 > "$L/pid"; echo 0 > "$L/restarts"; echo 0 > "$L/callstate"; echo good > "$L/hal"
+  echo 100 > "$L/pid"; echo 500 > "$L/aspid"; echo 0 > "$L/restarts"; echo 0 > "$L/callstate"; echo good > "$L/hal"
   cat > "$L/bin/getprop" <<STUB
 #!/bin/sh
 case \$1 in
   init.svc_debug_pid.vendor.audio-hal) cat "$L/pid" ;;
-  init.svc.vendor.audio-hal) echo running ;;
+  init.svc_debug_pid.audioserver) cat "$L/aspid" ;;
+  init.svc.vendor.audio-hal|init.svc.audioserver) echo running ;;
 esac
 STUB
   # A good HAL comes back as a new process; a broken one never gets a new pid.
@@ -551,6 +581,8 @@ STUB
 #!/bin/sh
 [ "\$1" = ctl.restart ] || exit 0
 echo \$((\$(cat "$L/restarts") + 1)) > "$L/restarts"
+# audioserver: init restarts the HAL with it.
+[ "\$2" = audioserver ] && echo \$((\$(cat "$L/aspid") + 1)) > "$L/aspid"
 [ "\$(cat "$L/hal")" = good ] && echo \$((\$(cat "$L/pid") + 1)) > "$L/pid"
 exit 0
 STUB
@@ -560,18 +592,23 @@ STUB
   _OHAL_DIR=$HAL_DIR; _OAUR=$AUR; _OOV_HAL=$OV_HAL; _OOV_ETC=$OV_ETC
   _OHS=$HAL_STOCK; _OHX=$HAL_STEREO; _OAS=$AUR_STOCK; _OAX=$AUR_STEREO; _OLR=$LIVE_ROOT
   _OMI=$MOUNTINFO; _OOM=$OUR_MOUNTS
+  _OAF=$AF; _OAFS=$AF_STOCK; _OAFX=$AF_STEREO; _OOV_AF=$OV_AF
   HAL_DIR=$L/vendor/lib64/hw; AUR=$L/vendor/etc/aurisys_config_rv.xml
   OV_HAL=$L/ov/hw; OV_ETC=$L/ov/etc; LIVE_ROOT=
+  AF=$L/system/lib64/libaudioflinger.so; OV_AF=$L/ov/lib64
+  AF_STOCK=$(_sha "$AF"); AF_STEREO=$(_sha "$OV_AF/libaudioflinger.so")
   MOUNTINFO=/proc/self/mountinfo; OUR_MOUNTS="$(basename "$TMP")/(live/ov|data/stock)/"
   HAL_STOCK=$(_sha "$HAL_DIR/audio.primary.mt6878.so"); AUR_STOCK=$(_sha "$AUR")
   HAL_STEREO=$(_sha "$OV_HAL/audio.primary.mt6878.so"); AUR_STEREO=$(_sha "$OV_ETC/aurisys_config_rv.xml")
   tick() { :; }
-  mounts() { awk -v d="$L/vendor" 'index($5, d) == 1' /proc/self/mountinfo | wc -l | tr -d ' '; }
+  mounts() { awk -v d="$L/vendor" -v e="$L/system" 'index($5, d) == 1 || index($5, e) == 1' /proc/self/mountinfo | wc -l | tr -d ' '; }
 
   check "stock saved while mono" "$(save_stock && _sha "$STOCKDIR/audio.primary.mediatek.so")" "$HAL_STOCK"
   live_switch stereo >/dev/null; _rc=$?
   check "mono -> stereo live" "$_rc $(stereo_active && echo stereo)" "0 stereo"
   check "both HAL names read as stereo" "$(cat "$HAL_DIR/audio.primary.mt6878.so" "$HAL_DIR/audio.primary.mediatek.so" | tr '\n' ' ')" "STEREO-HAL STEREO-HAL "
+  check "the mixer reads as the patched one" "$(cat "$AF")" "STEREO-AF"
+  check "audioserver restarted with the HAL" "$(cat "$L/aspid")" "501"
   check "HAL restarted once" "$(cat "$L/restarts")" "1"
   check "already stereo: nothing restarted" "$(live_switch stereo >/dev/null; cat "$L/restarts")" "1"
   # Back to mono: our mounts come off; the HAL must restart even though
@@ -587,7 +624,7 @@ STUB
   echo 0 > "$L/callstate"
 
   echo bad > "$L/hal"
-  check "HAL that does not come back: refused" "$(live_switch stereo)" "the audio HAL did not come back on the stereo files"
+  check "HAL that does not come back: refused" "$(live_switch stereo)" "the audio services did not come back on the stereo files"
   check "and back on stock" "$(stereo_active && echo stereo || echo mono) $(mounts)" "mono 0"
   echo good > "$L/hal"
 
@@ -641,6 +678,7 @@ STUB
   PATH=$_OPATH; HAL_DIR=$_OHAL_DIR; AUR=$_OAUR; OV_HAL=$_OOV_HAL; OV_ETC=$_OOV_ETC
   HAL_STOCK=$_OHS; HAL_STEREO=$_OHX; AUR_STOCK=$_OAS; AUR_STEREO=$_OAX; LIVE_ROOT=$_OLR
   MOUNTINFO=$_OMI; OUR_MOUNTS=$_OOM
+  AF=$_OAF; AF_STOCK=$_OAFS; AF_STEREO=$_OAFX; OV_AF=$_OOV_AF
   tick() { sleep 0.1 2>/dev/null || sleep 1; }
 else
   echo "  skip - bind mounts need root"

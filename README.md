@@ -41,11 +41,12 @@ nothing.
 
 ## Status
 
-**Current release: v0.9.9** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
+**Current release: v1.0.0** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
 in daily use on the test phone. Mono and Stereo switch without a reboot, left and right
-follow the phone's orientation, and Magisk offers new releases as updates. v0.9.9 fixes the
-Action button's switch to Stereo (it crashed the audio service), makes a failed switch fall
-back safely, and decides the orientation swap by Nothing's Dirac tuning instead of the output.
+follow the phone's orientation, and Magisk offers new releases as updates. v1.0.0 makes the
+orientation swap the same for every app: Android's mixer on this build has its own speaker
+swap at rotation 270, which skipped some apps; stereo switches it off (one branch in
+`libaudioflinger.so`) and the HAL swap is the only one.
 
 **Verified on the phone**
 - v0.9.9 orientation swap by Dirac's tuning: the left-only file in USB Audio Player Pro
@@ -87,6 +88,13 @@ back safely, and decides the orientation swap by Nothing's Dirac tuning instead 
 - Hi-res playback (USB Audio Player Pro, Direct 192 kHz) still works in stereo.
 
 **Not tested on a phone yet**
+- **v1.0.0, the one swap for every app.** Stereo now also stages a patched copy of
+  `/system/lib64/libaudioflinger.so` (one branch at 0x144fcc, hash-checked like the HAL) and the
+  HAL swaps every speaker stream at rotation 270, on every output. A live switch restarts
+  audioserver, and with it the HAL. Tested here: the HAL swap in the ARM64 emulator, staging,
+  stock copies, live switching and the fallback on fake files (156 checks). Needs on the
+  phone: the four buttons of the CMF L/R Test app, UAPP, VLC and YouTube, both orientations,
+  after updating and rebooting; and a Mono/Stereo switch with nothing playing.
 - v0.9.8 Action button: Magisk's **Action** on the module's card switches Mono <-> Stereo
   through `stereoctl channels` and prints its output. Checked: the script parses under
   dash, mksh and busybox and is packaged; not yet pressed on the phone.
@@ -99,11 +107,6 @@ back safely, and decides the orientation swap by Nothing's Dirac tuning instead 
   patched from the old build over the new one; the card and `stereoctl status` then say
   stereo is unavailable. Tested on fake vendor files (different HAL, different DSP config,
   missing HAL); seen on the phone only with the next Nothing OS update.
-- v0.9.9: games on the list built into Nothing's audio app (Dirac GAME, e.g. PUBG Mobile,
-  Call of Duty Mobile) and navigation apps (Dirac SPEECH): whether Dirac swaps in those
-  tunings. Check: play the game, `getprop persist.vendor.newdirac.cur.config` must read GAME,
-  then a sound known to come from the left. Apps Nothing blacklists (Dirac off) should be
-  swapped by the module. Games that play through AAudio's MMAP path would bypass the swap.
 - v0.9.9: a failed live switch ending on the stock files (tested on bind mounts over a
   Magisk-style skeleton; no failure has happened on the phone since).
 - Live switching from the app's Mono/Stereo buttons.
@@ -117,18 +120,8 @@ back safely, and decides the orientation swap by Nothing's Dirac tuning instead 
 - How the speaker holds up to long, loud stereo listening without Awinic's protection.
 
 **Pending**
-- InShot (forced to landscape with a rotation-control app) plays reversed with the earpiece on
-  your right: right only with the module's swap off, although Dirac read MOVIE throughout
-  (measured), where VLC is right with it on. InShot (`com.camerasideas.instashot`) is on
-  Nothing's video list, so MOVIE is the expected tuning, and Dirac writes
-  `persist.vendor.newdirac.cur.config` on every tuning change (`DiracSound_command`, checked in
-  `libdiraceffect_NT.so`): it was not GAME. InShot's track is set up like VLC's (deep buffer,
-  content type unknown, same effects). Not known yet what swaps it; it is the only test that
-  forced the screen rotation with another app. Dirac's tuning file (`interface.json`,
-  `dirac_resource.dar`) gives MUSIC, MOVIE, GAME and SPEECH the same processing blocks and no
-  rotation parameter, so how MUSIC follows the rotation is not known either; measured, it does
-  (UAPP and Wave Launcher's player, both MUSIC, come out right with the module not swapping). Possible fix if more apps turn
-  up: a list of apps the swap leaves alone.
+- InShot, games on Nothing's game list and navigation apps: explained by the mixer's own swap
+  (v1.0.0, Fixed); to be confirmed on the phone with the L/R Test app and InShot.
 - Speaker limiter, earpiece boost and EQ (asked for; design stage). Where it can run: the
   HAL's playback path calls `doStereoToMonoConversionIfNeed` (our swap) for every speaker
   stream, including USB Audio Player Pro's direct hi-res output, before the DSP, which runs
@@ -153,6 +146,15 @@ back safely, and decides the orientation swap by Nothing's Dirac tuning instead 
 - `ADDA_DL_MAX_VOL` was tried for a louder earpiece: no clear difference, left out.
 
 **Fixed recently**
+- v1.0.0: left and right depended on the app. Found in `libaudioflinger.so`: at rotation 270,
+  for a mixer thread on the speaker, Android's mixer swaps the channels itself (a decision at
+  0x144f60 reads the rotation it keeps from `rotation=`, a swap at 0x144e10 handles 8/16/24/32-bit
+  and float). It did not reach every app (VLC and YouTube were not swapped by it), so the
+  module's swap came on top of it for some apps and was missing for others; the Dirac-tuning
+  rule of v0.9.9 only matched the apps tested. Measured with one app playing one left-only
+  beep in each Dirac tuning (MUSIC, MOVIE, GAME, SPEECH all confirmed on screen): right only
+  where the module did not swap as well. Stereo now switches the mixer's swap off and the
+  module's swap is the only one.
 - v0.9.9: the Action button's switch to Stereo crashed the audio service until a reboot.
   Magisk starts `action.sh` as `./action.sh`, so the module folder was "."; the stereo file
   was then mounted from `./system/...` resolved at init's root, i.e. `/vendor/...` itself:
@@ -411,10 +413,14 @@ call is active, the mounts are undone and the change waits for a reboot.
 4. **Attenuation**: the amp is held at least `STEREO_ATTEN_DB` (default 6 dB)
    down through its own volume control, `aw_dev_0_volume` (1/8 dB steps, per
    the aw882xx driver). Mono gives the amp its previous value back.
+5. **The mixer's own swap** (v1.0.0): `/system/lib64/libaudioflinger.so` swaps
+   the speaker's channels at rotation 270 for most apps; one branch at
+   0x144fcc (`b.ne` -> `b`) makes its decision always "no swap", so the HAL's
+   swap is the only one. 4 bytes; the result must hash to the tested build.
 
 **No vendor file ships in this module.** Staging copies this phone's own
-`audio.primary.mt6878.so`, `audio.primary.mediatek.so` and
-`aurisys_config_rv.xml`, checks their SHA-256 against the analysed build,
+`audio.primary.mt6878.so`, `audio.primary.mediatek.so`,
+`aurisys_config_rv.xml` and `libaudioflinger.so`, checks their SHA-256 against the analysed build,
 patches them, and checks the result against the tested one before putting it
 in the module's overlay with the original SELinux labels. Anything else —
 another firmware, a different file — is refused and the phone stays on mono.
@@ -422,6 +428,11 @@ After a Nothing OS update the hashes will differ and stereo will refuse until
 the new build has been checked.
 
 **Risks, plainly:**
+
+- Stereo patches one branch in Android's mixer library (`libaudioflinger.so`,
+  part of the system, loaded by audioserver), only on the analysed build and
+  only while stereo is on; mono runs the stock file. If audioserver failed to
+  start on it, the same two-failed-boots watchdog removes the overlay.
 
 - Awinic's processing is what keeps the speaker within its excursion and
   temperature limits at high volume. In stereo, media gets only the amp's
@@ -444,16 +455,12 @@ the new build has been checked.
   the HAL under the phone's own SELinux rules) and, for the speaker-only route
   in 16- or 32-bit PCM (the cases MediaTek's fold handled), swaps the two
   channels of every buffer while it reads 270. Headphones and every other
-  route are never touched. Nothing's Dirac follows the music stream to whichever
-  output plays it and, in its MUSIC tuning, already swaps left and right with
-  the rotation itself; in MOVIE it does not (measured: same output, UAPP right
-  only without this swap, VLC only with it). Nothing's audio service picks the
-  tuning per app (`com.nothing.audioeffect`: video-list apps MOVIE, games GAME,
-  navigation SPEECH, everything else MUSIC) and Dirac keeps it in
-  `persist.vendor.newdirac.cur.config`, so the swap is skipped while that reads
-  MUSIC and `persist.vendor.newdirac.enable.value` reads 1. (v0.9.5-v0.9.8
-  skipped the primary output instead, which held only while MUSIC apps played
-  there.) The code is `hal-swap/patch.S`; `hal-swap/run.sh`
+  route are never touched. It is the only swap: Android's mixer on this build
+  (`libaudioflinger.so`) has its own speaker swap at rotation 270, made for phones
+  with two speakers, which reached some apps and not others (VLC and YouTube
+  not), so stereo switches that one branch off (see below). v0.9.5-v0.9.9 tried
+  to work around it instead, by output and then by Dirac's tuning; each rule
+  held only for the apps it was tested with. The code is `hal-swap/patch.S`; `hal-swap/run.sh`
   assembles it, runs it in an ARM64 emulator against test buffers, and checks
   the module carries exactly those bytes.
 

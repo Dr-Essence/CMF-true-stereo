@@ -6,18 +6,11 @@
 //   - the stream goes to the speaker alone (devices vector at
 //     [[this+0x20]+0x1d8] is exactly { AUDIO_DEVICE_OUT_SPEAKER = 0x2 }:
 //     the same check MediaTek's fold made; headphones are never swapped),
-//   - Nothing's Dirac is not already swapping it: Dirac follows the music
-//     stream to whichever output plays it, and in its MUSIC tuning it swaps
-//     left and right with the rotation itself; in MOVIE (and the other
-//     tunings) it does not. Measured on the phone, same output for both:
-//     UAPP (not on Nothing's app lists -> MUSIC) came out right only with
-//     this swap off, VLC (on its video list -> MOVIE) only with it on.
-//     Dirac keeps its tuning in persist.vendor.newdirac.cur.config and its
-//     switch in persist.vendor.newdirac.enable.value ("1.000000" on), so
-//     the swap is skipped while those read MUSIC and 1. If the tuning
-//     cannot be read at all, the earlier rule stands. (v0.9.5-v0.9.8 went
-//     by the output instead - skipping the primary one - which was right
-//     only while MUSIC apps happened to play there.)
+//   - on every output: this is the only swap. AudioFlinger on this build
+//     has its own speaker swap at rotation 270 (made for phones with two
+//     speakers), which stereo mode switches off (libaudioflinger.so, see
+//     channels.sh): it skipped some apps (VLC, YouTube), so any rule here
+//     about which streams it had already swapped was wrong for some app.
 //   - the format at [[this+0x20]] is PCM_16_BIT (1) or PCM_32_BIT (3), the
 //     two MediaTek's fold handled,
 //   - vendor.audiohal.cmf_rotation reads 270 (earpiece on the right,
@@ -51,38 +44,6 @@ swapfn:
         bl      PGI
         cmp     w0, #270
         b.ne    9f
-        // Dirac on and in MUSIC: it swaps this stream itself.
-        sub     sp, sp, #96             // PROP_VALUE_MAX (92), rounded up
-        adr     x0, kcfg
-        mov     x1, sp
-        adr     x2, unread              // "?" when it cannot be read
-        bl      PG
-        ldrb    w9, [sp]
-        cmp     w9, #'?'
-        b.ne    6f
-        // Unreadable (no Dirac, or not allowed): the earlier rule, which
-        // held while MUSIC apps played on the primary output.
-        add     sp, sp, #96
-        ldr     x8, [x19, #0x20]
-        ldr     w11, [x8, #0xc]
-        tbnz    w11, #1, 9f
-        b       7f
-6:      ldr     x9, [sp]
-        and     x9, x9, #0xffffffffffff // "MUSIC" and its NUL
-        ldr     x10, music
-        cmp     x9, x10
-        b.ne    5f
-        adr     x0, kon
-        mov     x1, sp
-        adr     x2, key + 28
-        bl      PG
-        ldrb    w9, [sp]
-        cmp     w9, #'1'
-        b.ne    5f
-        add     sp, sp, #96
-        b       9f
-5:      add     sp, sp, #96
-7:
         ldr     x8, [x19, #0x20]
         ldr     w8, [x8]
         cmp     w8, #3
@@ -118,11 +79,6 @@ rotcave:
         b       RET2587C4
 
 key:    .asciz  "vendor.audiohal.cmf_rotation"
-kcfg:   .asciz  "persist.vendor.newdirac.cur.config"
-kon:    .asciz  "persist.vendor.newdirac.enable.value"
-unread: .asciz  "?"
-        .balign 8
-music:  .ascii  "MUSIC\0\0\0"
         .balign 4
         .globl patch_end
 patch_end:
