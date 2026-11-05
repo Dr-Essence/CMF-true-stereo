@@ -69,6 +69,8 @@ follow the phone's orientation, and Magisk offers new releases as updates.
 - v0.9.6 update button: `module.prop` points Magisk at `update.json`, which the release workflow
   moves to each new version after its zip is published. Seen working only once a later release
   (v0.9.7) is out: Magisk should then show Update for this module.
+- Author shown in Magisk: `module.prop` now says Dr.Essence (was Tiimoo-debug); Magisk shows
+  it once the next release (v0.9.7) is installed.
 - The orientation swap with Nothing's Dirac switched off: apps on the primary output are then
   not swapped (known limit; nothing swaps them).
 - Live switching from the app's Mono/Stereo buttons (needs the next app build).
