@@ -156,6 +156,18 @@ carry such a track in `vendor.audiohal.cmf_swap`; the HAL swaps only those, only
   average power or a different spread of frequencies; the option without any EQ is a leveller
   whose peaks never exceed today's full-scale peaks (more for quiet, dynamic recordings, little
   for already loud masters).
+- Driver study, stereo part (CMF L/R Test DRIVER STUDY, measured with the HAL's raw 24-bit
+  microphone capture, levels taken from the HAL's copy of what reached it):
+  - Dirac (MUSIC) shapes the tones before the drivers: about +2 dB at 150 Hz, +5 to +6 dB at
+    200-500 Hz, -2 to -4 dB at 3-5 kHz, a limiter holding peaks at about -0.2 dBFS, and a
+    second harmonic at -16 dB on 100 Hz (bass enhancement). Above 150 Hz what reaches the
+    drivers is clean (under 0.1 % distortion).
+  - Earpiece: under about 5-10 % distortion up to about -3 dBFS from 150 Hz up; in the top
+    1.5 dB it clips (odd harmonics jump to 25-35 % at 150, 200 Hz and 2 kHz).
+  - Speaker (Awinic off, stereo): distortion grows steadily with level from about -12 dBFS,
+    mostly odd harmonics, to about 27 % at -3 dBFS at 1.2-2 kHz (both microphones agree on the
+    trend).
+  - Pending: the Mono part (Awinic on) for the same tones, to compare.
 - Speaker limiter, earpiece boost and EQ (asked for; design stage). Where it can run: the
   HAL's playback path calls `doStereoToMonoConversionIfNeed` (our swap) for every speaker
   stream, including USB Audio Player Pro's direct hi-res output, before the DSP, which runs
