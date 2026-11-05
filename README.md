@@ -41,12 +41,12 @@ nothing.
 
 ## Status
 
-**Current release: v1.0.0** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
-in daily use on the test phone. Mono and Stereo switch without a reboot, left and right
-follow the phone's orientation, and Magisk offers new releases as updates. v1.0.0 makes the
-orientation swap the same for every app: Android's mixer on this build has its own speaker
-swap at rotation 270, which skipped some apps; stereo switches it off (one branch in
-`libaudioflinger.so`) and the HAL swap is the only one.
+**Current release: v1.0.1** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
+in daily use on the test phone. Mono and Stereo switch without a reboot, and Magisk offers new
+releases as updates. Left and right follow the phone's orientation through Android itself: the
+HAL's own recordings showed that Android already swaps the channels at rotation 270 before the
+HAL, so v1.0.1 removes the module's own swap (which undid it) and the v1.0.0 mixer patch (which
+changed nothing). VLC and YouTube may play reversed with the earpiece on your right (see Pending).
 
 **Verified on the phone**
 - v0.9.9 orientation swap by Dirac's tuning: the left-only file in USB Audio Player Pro
@@ -88,13 +88,11 @@ swap at rotation 270, which skipped some apps; stereo switches it off (one branc
 - Hi-res playback (USB Audio Player Pro, Direct 192 kHz) still works in stereo.
 
 **Not tested on a phone yet**
-- **v1.0.0, the one swap for every app.** Stereo now also stages a patched copy of
-  `/system/lib64/libaudioflinger.so` (one branch at 0x144fcc, hash-checked like the HAL) and the
-  HAL swaps every speaker stream at rotation 270, on every output. A live switch restarts
-  audioserver, and with it the HAL. Tested here: the HAL swap in the ARM64 emulator, staging,
-  stock copies, live switching and the fallback on fake files (156 checks). Needs on the
-  phone: the four buttons of the CMF L/R Test app, UAPP, VLC and YouTube, both orientations,
-  after updating and rebooting; and a Mono/Stereo switch with nothing playing.
+- **v1.0.1** on the phone: UAPP, the CMF L/R Test app's four buttons and a game in both
+  orientations (expected right: Android swaps them), and VLC and YouTube (may be reversed with
+  the earpiece on your right). Tested here: every earlier stereo HAL (v0.9.5, v0.9.9, v1.0.0)
+  and the stock one patch to the exact v0.9.0-v0.9.4 file on the real files, the undo gives
+  stock back, and the test suite (147 checks).
 - v0.9.8 Action button: Magisk's **Action** on the module's card switches Mono <-> Stereo
   through `stereoctl channels` and prints its output. Checked: the script parses under
   dash, mksh and busybox and is packaged; not yet pressed on the phone.
@@ -120,8 +118,10 @@ swap at rotation 270, which skipped some apps; stereo switches it off (one branc
 - How the speaker holds up to long, loud stereo listening without Awinic's protection.
 
 **Pending**
-- InShot, games on Nothing's game list and navigation apps: explained by the mixer's own swap
-  (v1.0.0, Fixed); to be confirmed on the phone with the L/R Test app and InShot.
+- VLC and YouTube with the earpiece on your right: earlier (v0.9.9) VLC came out right only with
+  the module's swap on, so Android may not swap its stream. Needs one HAL recording of VLC
+  playing the left-only file at rotation 270 (CMF L/R Test, DRIVER RECORDING) to see what
+  reaches the HAL, and what sets it apart from the apps Android does swap.
 - Speaker limiter, earpiece boost and EQ (asked for; design stage). Where it can run: the
   HAL's playback path calls `doStereoToMonoConversionIfNeed` (our swap) for every speaker
   stream, including USB Audio Player Pro's direct hi-res output, before the DSP, which runs
@@ -146,15 +146,15 @@ swap at rotation 270, which skipped some apps; stereo switches it off (one branc
 - `ADDA_DL_MAX_VOL` was tried for a louder earpiece: no clear difference, left out.
 
 **Fixed recently**
-- v1.0.0: left and right depended on the app. Found in `libaudioflinger.so`: at rotation 270,
-  for a mixer thread on the speaker, Android's mixer swaps the channels itself (a decision at
-  0x144f60 reads the rotation it keeps from `rotation=`, a swap at 0x144e10 handles 8/16/24/32-bit
-  and float). It did not reach every app (VLC and YouTube were not swapped by it), so the
-  module's swap came on top of it for some apps and was missing for others; the Dirac-tuning
-  rule of v0.9.9 only matched the apps tested. Measured with one app playing one left-only
-  beep in each Dirac tuning (MUSIC, MOVIE, GAME, SPEECH all confirmed on screen): right only
-  where the module did not swap as well. Stereo now switches the mixer's swap off and the
-  module's swap is the only one.
+- v1.0.1: v1.0.0 played reversed in both orientations. Measured with the HAL's own recordings
+  (`vendor.streamout.pcm.dump`, CMF L/R Test FULL CHECK): a left-only beep reaches the HAL on
+  the right channel at rotation 270 and on the left at 90, in all four Dirac tunings, and from
+  USB Audio Player Pro: Android already swaps it. The module's swap undid that; the
+  `libaudioflinger.so` patch was loaded (checked in audioserver's own mappings) and changed
+  nothing. Both are gone: stereo is again the v0.9.0-v0.9.4 HAL patch.
+- v1.0.0 (wrong, replaced by v1.0.1): it patched the speaker swap in `libaudioflinger.so`, on
+  the reading that Android's mixer caused the doubled swap; the HAL recordings later showed
+  the swap still happening with that patch loaded.
 - v0.9.9: the Action button's switch to Stereo crashed the audio service until a reboot.
   Magisk starts `action.sh` as `./action.sh`, so the module folder was "."; the stereo file
   was then mounted from `./system/...` resolved at init's root, i.e. `/vendor/...` itself:
@@ -397,8 +397,9 @@ call is active, the mounts are undone and the change waits for a reboot.
 
 1. **The HAL fold**: `doStereoToMonoConversionIfNeed` no longer folds to mono,
    and the DSP task is told the speaker is stereo (`hw_info` bit `0x4`, two
-   branches). Since v0.9.5 that function instead does the **orientation swap**
-   (below). 222 bytes in four places; the result must hash to the tested build.
+   branches). 16 bytes in three places (v0.9.5-v1.0.0 put an orientation swap
+   there; v1.0.1 writes those bytes back to stock first); the result must hash
+   to the tested build.
 2. **The DSP fold**: `AURISYS_SCENARIO_DSP_PLAYBACK_SMARTPA` runs
    `aurisys_demo` instead of `smartpa_awinic`. The phone's own
    `aurisys_config_rv.xml` already declares `aurisys_demo` for that scenario
@@ -413,14 +414,10 @@ call is active, the mounts are undone and the change waits for a reboot.
 4. **Attenuation**: the amp is held at least `STEREO_ATTEN_DB` (default 6 dB)
    down through its own volume control, `aw_dev_0_volume` (1/8 dB steps, per
    the aw882xx driver). Mono gives the amp its previous value back.
-5. **The mixer's own swap** (v1.0.0): `/system/lib64/libaudioflinger.so` swaps
-   the speaker's channels at rotation 270 for most apps; one branch at
-   0x144fcc (`b.ne` -> `b`) makes its decision always "no swap", so the HAL's
-   swap is the only one. 4 bytes; the result must hash to the tested build.
 
 **No vendor file ships in this module.** Staging copies this phone's own
-`audio.primary.mt6878.so`, `audio.primary.mediatek.so`,
-`aurisys_config_rv.xml` and `libaudioflinger.so`, checks their SHA-256 against the analysed build,
+`audio.primary.mt6878.so`, `audio.primary.mediatek.so` and
+`aurisys_config_rv.xml`, checks their SHA-256 against the analysed build,
 patches them, and checks the result against the tested one before putting it
 in the module's overlay with the original SELinux labels. Anything else —
 another firmware, a different file — is refused and the phone stays on mono.
@@ -429,10 +426,6 @@ the new build has been checked.
 
 **Risks, plainly:**
 
-- Stereo patches one branch in Android's mixer library (`libaudioflinger.so`,
-  part of the system, loaded by audioserver), only on the analysed build and
-  only while stereo is on; mono runs the stock file. If audioserver failed to
-  start on it, the same two-failed-boots watchdog removes the overlay.
 
 - Awinic's processing is what keeps the speaker within its excursion and
   temperature limits at high volume. In stereo, media gets only the amp's
@@ -445,24 +438,11 @@ the new build has been checked.
 - With the daemon stopped (`stereoctl off`) the amp goes back to its stock
   left slot on the next stream, so in stereo the speaker would play the left
   channel alone. Switch to mono if you want the module off.
-- **Orientation swap** (v0.9.5): turned with the earpiece on your right, left
-  and right swap so the image stays the right way round. The earpiece cannot be
-  routed to the right channel (its DAC input has no CH2 source), so the swap is
-  done in the stream itself, in the HAL: Android already sends the HAL the
-  screen rotation (`rotation=0|90|270`, measured; 270 = earpiece on the right),
-  which the stock HAL drops. The patch keeps it in
-  `vendor.audiohal.cmf_rotation` (a MediaTek audio-HAL property, writable by
-  the HAL under the phone's own SELinux rules) and, for the speaker-only route
-  in 16- or 32-bit PCM (the cases MediaTek's fold handled), swaps the two
-  channels of every buffer while it reads 270. Headphones and every other
-  route are never touched. It is the only swap: Android's mixer on this build
-  (`libaudioflinger.so`) has its own speaker swap at rotation 270, made for phones
-  with two speakers, which reached some apps and not others (VLC and YouTube
-  not), so stereo switches that one branch off (see below). v0.9.5-v0.9.9 tried
-  to work around it instead, by output and then by Dirac's tuning; each rule
-  held only for the apps it was tested with. The code is `hal-swap/patch.S`; `hal-swap/run.sh`
-  assembles it, runs it in an ARM64 emulator against test buffers, and checks
-  the module carries exactly those bytes.
+- **Orientation**: turned with the earpiece on your right, Android itself swaps left and
+  right before the audio HAL (it sends the rotation to its mixer and the HAL, and the HAL's own
+  recordings show the channels already swapped at rotation 270). The module adds nothing here.
+  v0.9.5-v1.0.0 swapped in the HAL as well, and tried to guess when not to (by output, by Dirac
+  tuning, then by patching the mixer); each rule held only for the apps it was tested with.
 
 MediaTek's "2nd loudspeaker" machinery **is** present on this build, in
 `/vendor/etc/audio_param/`:

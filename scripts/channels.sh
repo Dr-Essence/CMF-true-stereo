@@ -35,14 +35,20 @@
 HAL_NAMES="audio.primary.mt6878.so audio.primary.mediatek.so"
 HAL_DIR=/vendor/lib64/hw
 HAL_STOCK=28db2e24e9d4c4f88a67a7631ab581fa064bb03a47a87314b7599a2cb757a324
-HAL_STEREO=8521fadc4ccb85e3a7f1f001519818f6ece720b22faa03f090826546c43b05dc
+# Stereo: the fold returns at once and nothing else in the stream changes.
+# Measured with the HAL's own recordings (vendor.streamout.pcm.dump): Android
+# already swaps left and right with the rotation before the HAL (a left-only
+# beep reached it on the right at rotation 270, on the left at 90, in all four
+# Dirac tunings and from USB Audio Player Pro), so a swap here only undid it.
+# This is the v0.9.0-v0.9.4 build, the one that was tested first.
+HAL_STEREO=2615f6e28e40a0520f6122e03513f374294e011fa3c654801e898f5ea62a5edf
+# v1.0.0 stereo (swap on every output): patched again in place.
+HAL_STEREO_V4=8521fadc4ccb85e3a7f1f001519818f6ece720b22faa03f090826546c43b05dc
 # v0.9.9 stereo (swap skipped in Dirac's MUSIC tuning): patched again in place.
 HAL_STEREO_V3=c1f3dd1f02bd4afc34ab0dd76f8900ad3577893bfcae8b7f2a3c81946c61bd2c
 # v0.9.5-v0.9.8 stereo (skipped the primary output, not Dirac's MUSIC tuning):
 # patched again in place, which gives the current one.
 HAL_STEREO_V2=58a5755e0203183ad7fa541528305a3040f204e503528ad9182f4118fe1368d9
-# v0.9.0-v0.9.4 stereo (no orientation swap): converted on the next staging.
-HAL_STEREO_V1=2615f6e28e40a0520f6122e03513f374294e011fa3c654801e898f5ea62a5edf
 
 AUR=/vendor/etc/aurisys_config_rv.xml
 AUR_STOCK=f5818d29d40ce6a5e18765af96ab72a00db8c816e5a0c308c8003eff6e65f2cc
@@ -51,69 +57,43 @@ AUR_STEREO=f0f7512085d86e8707131a4e6b3f413d25115c88419c69193493957da4d30ced
 AUR_TEST=b9d136ceea184a7a1dec8b952cf115df7144af8e770930d513eb6df6329ab889
 AUR_MARK='cmf_stereo: stereo'
 
-# Android's mixer. On this build AudioFlinger has its own speaker swap: at
-# rotation 270, for a mixer thread playing to the speaker, it swaps left and
-# right itself (a virtual method at 0x144f60 decides, 0x144e10 swaps; made for
-# Nothing phones with two speakers, inaudible on this one in mono). It skips
-# some apps (VLC and YouTube measured), so with it on no rule in the HAL could
-# be right for every app. Stereo switches it off - one branch at 0x144fcc,
-# b.ne -> b, so the decision always says "no swap" - and the HAL swap below
-# is then the only one, the same for every app. Measured before: the same
-# left-only beep came out right only where the HAL did not swap as well.
-AF=/system/lib64/libaudioflinger.so
-AF_STOCK=813cd2b791ca28970ed3d2e0f585a2817ee8e501aafb9d8eb8f7954e08543ae0
-AF_STEREO=60f1d061a133edf2fbda6ad956d3a88034af0be4f2146fff1e84e97df1f5892c
-_patch_af()   { printf '\046\000\000\024' | dd of="$1" bs=1 seek=1331148 conv=notrunc 2>/dev/null; }
-_unpatch_af() { printf '\301\004\000\124' | dd of="$1" bs=1 seek=1331148 conv=notrunc 2>/dev/null; }
-
 # Where the overlay lives inside the module.
 OV_HAL=$MODDIR/system/vendor/lib64/hw
 OV_ETC=$MODDIR/system/vendor/etc
-OV_AF=$MODDIR/system/lib64
 
 # Every file stereo replaces. _spec NAME sets its path (_dst), its stock and
 # stereo hashes (_x, _y) and where the module keeps its stereo copy (_ovd).
-STEREO_FILES="$HAL_NAMES aurisys_config_rv.xml libaudioflinger.so"
+STEREO_FILES="$HAL_NAMES aurisys_config_rv.xml"
 _spec() {
   case $1 in
     aurisys_config_rv.xml) _dst=$AUR; _x=$AUR_STOCK; _y=$AUR_STEREO; _ovd=$OV_ETC ;;
-    libaudioflinger.so)    _dst=$AF;  _x=$AF_STOCK;  _y=$AF_STEREO;  _ovd=$OV_AF ;;
     *)                     _dst=$HAL_DIR/$1; _x=$HAL_STOCK; _y=$HAL_STEREO; _ovd=$OV_HAL ;;
   esac
 }
 
 _sha() { sha256sum "$1" 2>/dev/null | cut -d' ' -f1; }
 
-# Patch a stock HAL copy in place (444 bytes in four spots):
-#   0x27b820 doStereoToMonoConversionIfNeed: replaced by the orientation swap
-#            and the rotation store (hal-swap/patch.S, 432 bytes, assembled
-#            and tested in an ARM64 emulator: hal-swap/run.sh); swaps left and
-#            right for the speaker-only route when the phone is turned with
-#            the earpiece on the right (Android's rotation=270), except while
-#            Nothing's Dirac is on in its MUSIC tuning, which swaps the
-#            stream itself
-#   0x2587c0 setParameters, "rotation" key: b to the rotation store, which
-#            keeps the value in vendor.audiohal.cmf_rotation (the stock HAL
-#            only drops it) and returns
+# Patch a stock HAL copy in place (16 bytes in three spots):
+#   0x27b820 doStereoToMonoConversionIfNeed: returns at once (no fold to mono)
 #   0x27f2d4 InitArsiTaskConfig         b.ne -> nop (always set hw_info 0x4)
 #   0x1e0a00 SetArsiTaskConfig          b.ne -> nop (same, DSP stream manager)
-HAL_SWAP_BODY='\375\173\275\251\375\003\000\221\363\123\001\251\365\023\000\371\363\003\000\252\364\003\001\252\365\003\002\252\150\022\100\371\050\004\000\264\011\251\135\251\113\001\011\313\177\021\000\361\241\003\000\124\053\001\100\271\177\011\000\161\101\003\000\124\140\004\000\020\341\003\037\052\342\213\003\224\037\070\004\161\241\002\000\124\150\022\100\371\010\001\100\271\037\015\000\161\140\001\000\124\037\005\000\161\341\001\000\124\251\376\102\323\251\001\000\264\212\002\100\271\112\101\212\023\212\106\000\270\051\005\000\361\201\377\377\124\007\000\000\024\251\376\103\323\251\000\000\264\212\056\100\051\213\052\201\050\051\005\000\361\241\377\377\124\340\003\037\052\365\023\100\371\363\123\101\251\375\173\303\250\300\003\137\326\341\343\101\371\200\000\000\020\370\235\003\224\001\010\000\320\267\163\377\027\166\145\156\144\157\162\056\141\165\144\151\157\150\141\154\056\143\155\146\137\162\157\164\141\164\151\157\156\000\000\000\000'
-# The stock bytes after it, up to the end of the longest earlier body (v0.9.9,
-# 432 bytes): written too, so any earlier stereo HAL patches to the same file.
-HAL_SWAP_RESTORE='\071\212\003\224\030\001\000\067\051\000\000\024\337\006\000\161\341\004\000\124\370\003\037\052\340\023\100\371\000\377\377\265\170\004\000\064\250\022\100\371\010\001\100\271\037\015\000\161\100\002\000\124\037\005\000\161\241\003\000\124\223\003\000\264\037\040\003\325\210\002\100\171\163\022\000\361\211\006\100\171\010\075\110\013\051\075\111\013\010\075\000\023\051\075\001\023\050\005\210\013\210\002\000\171\210\006\000\171\224\022\000\221\241\376\377\124\016\000\000\024\263\001\000\264\037\040\003\325\037\040\003\325\210\046\100\051\037\001\000\161\010\245\210\032\077\001\000\161\051\245\211\032\163\042\000\361\051\175\001\023\050\005\210\013\210\042\201\050\341\376\377\124\350\026\100\371\251\203\137\370\037\001\011\353\241\002\000\124\340\003\037\052\364\117\107\251'
-# b rotcave, written at 0x2587c0 (rotcave sits inside the body above).
-HAL_SWAP_B='\106\214\000\024'
+# First the stock bytes are written back where v0.9.5-v1.0.0 put the
+# orientation swap (432 bytes at 0x27b820) and its setParameters branch
+# (0x2587c0), so any earlier stereo HAL patches to the same file.
+HAL_STOCK_REGION='\377\003\002\321\375\173\004\251\370\137\005\251\366\127\006\251\364\117\007\251\375\003\001\221\127\320\073\325\365\003\000\252\350\026\100\371\363\003\002\252\364\003\001\252\250\203\037\370\000\014\100\371\243\225\003\224\366\003\000\052\037\004\000\161\241\002\000\124\250\022\100\371\340\203\000\221\001\141\007\221\264\212\003\224\350\047\102\251\037\001\011\353\000\001\000\124\012\001\100\271\137\011\000\161\240\000\000\124\010\021\000\221\037\001\011\353\141\377\377\124\007\000\000\024\037\001\011\353\240\000\000\124\070\000\200\122\340\023\100\371\340\002\000\265\037\000\000\024\250\022\100\371\001\141\007\221\340\043\000\221\240\212\003\224\340\243\100\251\010\001\000\353\340\000\000\124\037\021\000\361\250\000\000\124\010\000\100\271\037\005\000\161\370\027\237\032\003\000\000\024\200\001\000\264\370\003\037\052\340\013\000\371\077\212\003\224\337\006\000\161\201\001\000\124\340\023\100\371\100\001\000\264\340\027\000\371\071\212\003\224\030\001\000\067\051\000\000\024\337\006\000\161\341\004\000\124\370\003\037\052\340\023\100\371\000\377\377\265\170\004\000\064\250\022\100\371\010\001\100\271\037\015\000\161\100\002\000\124\037\005\000\161\241\003\000\124\223\003\000\264\037\040\003\325\210\002\100\171\163\022\000\361\211\006\100\171\010\075\110\013\051\075\111\013\010\075\000\023\051\075\001\023\050\005\210\013\210\002\000\171\210\006\000\171\224\022\000\221\241\376\377\124\016\000\000\024\263\001\000\264\037\040\003\325\037\040\003\325\210\046\100\051\037\001\000\161\010\245\210\032\077\001\000\161\051\245\211\032\163\042\000\361\051\175\001\023\050\005\210\013\210\042\201\050\341\376\377\124\350\026\100\371\251\203\137\370\037\001\011\353\241\002\000\124\340\003\037\052\364\117\107\251'
+HAL_STOCK_B='\041\011\000\260'
 _patch_hal() {
-  printf "$HAL_SWAP_BODY$HAL_SWAP_RESTORE" | dd of="$1" bs=1 seek=2603040 conv=notrunc 2>/dev/null &&
-  printf "$HAL_SWAP_B" | dd of="$1" bs=1 seek=2459584 conv=notrunc 2>/dev/null &&
+  printf "$HAL_STOCK_REGION" | dd of="$1" bs=1 seek=2603040 conv=notrunc 2>/dev/null &&
+  printf "$HAL_STOCK_B" | dd of="$1" bs=1 seek=2459584 conv=notrunc 2>/dev/null &&
+  printf '\340\003\037\052\300\003\137\326' | dd of="$1" bs=1 seek=2603040 conv=notrunc 2>/dev/null &&
   printf '\037\040\003\325' | dd of="$1" bs=1 seek=2618068 conv=notrunc 2>/dev/null &&
   printf '\037\040\003\325' | dd of="$1" bs=1 seek=1968640 conv=notrunc 2>/dev/null
 }
 
-# The reverse of the v0.9.0-v0.9.4 stereo patch: the stock bytes at its three
-# spots (16 bytes). Verified: applied to that build it gives back the stock
-# build's exact hash. The current patch is undone from the stock copy instead.
-_unpatch_hal_v1() {
+# The reverse of the stereo patch: the stock bytes at its three spots (16
+# bytes). Verified: applied to the stereo build it gives back the stock
+# build's exact hash.
+_unpatch_hal() {
   printf '\377\003\002\321\375\173\004\251' | dd of="$1" bs=1 seek=2603040 conv=notrunc 2>/dev/null &&
   printf '\201\000\000\124' | dd of="$1" bs=1 seek=2618068 conv=notrunc 2>/dev/null &&
   printf '\201\000\000\124' | dd of="$1" bs=1 seek=1968640 conv=notrunc 2>/dev/null
@@ -168,14 +148,10 @@ build_known() {
     _f=$(_view "$HAL_DIR/$_n")
     [ -f "$_f" ] || return 2
     case $(_sha "$_f") in
-      "$HAL_STOCK"|"$HAL_STEREO"|"$HAL_STEREO_V3"|"$HAL_STEREO_V2"|"$HAL_STEREO_V1") ;;
+      "$HAL_STOCK"|"$HAL_STEREO"|"$HAL_STEREO_V4"|"$HAL_STEREO_V3"|"$HAL_STEREO_V2") ;;
       *) return 1 ;;
     esac
   done
-  case $(_sha "$(_view "$AF")") in
-    "$AF_STOCK"|"$AF_STEREO") ;;
-    *) return 1 ;;
-  esac
   case $(_sha "$(_view "$AUR")") in
     "$AUR_STOCK"|"$AUR_STEREO"|"$AUR_TEST") return 0 ;;
   esac
@@ -213,11 +189,8 @@ stage_stereo() {
     case $_h in
       "$HAL_STOCK")  _patch_hal "$_tmp/$_n" || { _fail="patching $_n failed"; break; } ;;
       "$HAL_STEREO") ;;   # already ours (overlay mounted): keep as is
-      "$HAL_STEREO_V2"|"$HAL_STEREO_V3")   # v0.9.5-v0.9.9: same spots, the patch rewrites them all
+      "$HAL_STEREO_V2"|"$HAL_STEREO_V3"|"$HAL_STEREO_V4")   # v0.9.5-v1.0.0: the patch rewrites every spot they changed
         _patch_hal "$_tmp/$_n" || { _fail="converting the earlier stereo $_n failed"; break; } ;;
-      "$HAL_STEREO_V1")   # the earlier stereo build: back to stock, then patch
-        { _unpatch_hal_v1 "$_tmp/$_n" && [ "$(_sha "$_tmp/$_n")" = "$HAL_STOCK" ] && _patch_hal "$_tmp/$_n"; } ||
-          { _fail="converting the earlier stereo $_n failed"; break; } ;;
       *) _fail="$_src is not the analysed build ($_h) - refusing to patch an unknown binary"; break ;;
     esac
     [ "$(_sha "$_tmp/$_n")" = "$HAL_STEREO" ] || { _fail="patched $_n does not match the tested binary"; break; }
@@ -233,21 +206,6 @@ stage_stereo() {
   [ -z "$_fail" ] && [ "$(_sha "$_tmp/aurisys_config_rv.xml")" != "$AUR_STEREO" ] && \
     _fail="patched aurisys_config_rv.xml does not match the expected result"
 
-  # The mixer, from a checked stock copy when there is one.
-  if [ -z "$_fail" ]; then
-    _src=$AF
-    [ "$(_sha "$STOCKDIR/libaudioflinger.so")" = "$AF_STOCK" ] && _src=$STOCKDIR/libaudioflinger.so
-    cp -f "$_src" "$_tmp/libaudioflinger.so" || _fail="cannot copy $_src"
-  fi
-  if [ -z "$_fail" ]; then
-    case $(_sha "$_tmp/libaudioflinger.so") in
-      "$AF_STOCK") _patch_af "$_tmp/libaudioflinger.so" ;;
-      "$AF_STEREO") ;;
-      *) _fail="$AF is not the analysed build - refusing" ;;
-    esac
-    [ -z "$_fail" ] && [ "$(_sha "$_tmp/libaudioflinger.so")" != "$AF_STEREO" ] && \
-      _fail="patched libaudioflinger.so does not match the expected result"
-  fi
 
   if [ -n "$_fail" ]; then
     rm -rf "$_tmp"
@@ -265,10 +223,6 @@ stage_stereo() {
   mv -f "$_tmp/aurisys_config_rv.xml" "$OV_ETC/aurisys_config_rv.xml"
   chmod 0644 "$OV_ETC/aurisys_config_rv.xml"
   chcon "$(ls -Z "$AUR" | awk '{print $1}')" "$OV_ETC/aurisys_config_rv.xml" 2>/dev/null
-  mkdir -p "$OV_AF"
-  mv -f "$_tmp/libaudioflinger.so" "$OV_AF/libaudioflinger.so"
-  chmod 0644 "$OV_AF/libaudioflinger.so"
-  chcon "$(ls -Z "$AF" | awk '{print $1}')" "$OV_AF/libaudioflinger.so" 2>/dev/null
   rm -rf "$_tmp"
   log info "stereo: overlay staged (takes effect after reboot)"
   return 0
@@ -276,9 +230,9 @@ stage_stereo() {
 
 unstage_stereo() {
   for _n in $HAL_NAMES; do rm -f "$OV_HAL/$_n"; done
-  rm -f "$OV_ETC/aurisys_config_rv.xml" "$OV_AF/libaudioflinger.so"
+  rm -f "$OV_ETC/aurisys_config_rv.xml"
   # Leave system/bin in place: it carries the stereoctl shim.
-  rmdir "$OV_HAL" "$MODDIR/system/vendor/lib64" "$OV_ETC" "$MODDIR/system/vendor" "$OV_AF" 2>/dev/null
+  rmdir "$OV_HAL" "$MODDIR/system/vendor/lib64" "$OV_ETC" "$MODDIR/system/vendor" 2>/dev/null
   log info "stereo: overlay removed (mono after reboot)"
   return 0
 }
@@ -321,18 +275,16 @@ _global() {
 # kept only when it hashes to the analysed stock build.
 save_stock() {
   mkdir -p "$STOCKDIR" || return 1
-  # The mixer first: a HAL that cannot be rebuilt must not stop its copy.
-  for _n in libaudioflinger.so $HAL_NAMES aurisys_config_rv.xml; do
+  for _n in $HAL_NAMES aurisys_config_rv.xml; do
     _spec "$_n"; _src=$(_view "$_dst")
     _t=$STOCKDIR/$_n
     [ "$(_sha "$_t")" = "$_x" ] && continue
     case $(_sha "$_src") in
       "$_x") cp -f "$_src" "$_t.tmp" || return 1 ;;
-      "$_y"|"$HAL_STEREO_V1")
+      "$_y")
         case $_n in
           aurisys_config_rv.xml) _unpatch_aurisys "$_src" "$_t.tmp" || return 1 ;;
-          libaudioflinger.so) cp -f "$_src" "$_t.tmp" && _unpatch_af "$_t.tmp" || return 1 ;;
-          *) cp -f "$_src" "$_t.tmp" && _unpatch_hal_v1 "$_t.tmp" || return 1 ;;
+          *) cp -f "$_src" "$_t.tmp" && _unpatch_hal "$_t.tmp" || return 1 ;;
         esac ;;
       *) return 1 ;;
     esac
@@ -380,29 +332,19 @@ in_call() {
 }
 
 # Restart the audio HAL and wait for a new process that stays up.
-# audioserver and the audio HAL, together. libaudioflinger.so is loaded by
-# audioserver, and init restarts the HAL with it (audioserver.rc onrestart,
-# measured in the phone's log), so one restart brings both up on the files
-# mounted now. Measured with the HAL alone: back within seconds, players
-# pause, calls work.
-AS_SVC=audioserver
 hal_restart() {
-  _oh=$(getprop "init.svc_debug_pid.$HAL_SVC")
-  _oa=$(getprop "init.svc_debug_pid.$AS_SVC")
-  setprop ctl.restart "$AS_SVC" || return 1
-  _w=0; _nh=; _na=
-  while [ $_w -lt 100 ]; do
+  _old=$(getprop "init.svc_debug_pid.$HAL_SVC")
+  setprop ctl.restart "$HAL_SVC" || return 1
+  _w=0; _new=
+  while [ $_w -lt 80 ]; do
     tick; _w=$((_w + 1))
-    _nh=$(getprop "init.svc_debug_pid.$HAL_SVC")
-    _na=$(getprop "init.svc_debug_pid.$AS_SVC")
-    [ "$(getprop "init.svc.$HAL_SVC")" = running ] && [ "$(getprop "init.svc.$AS_SVC")" = running ] &&
-      [ -n "$_nh" ] && [ "$_nh" != "$_oh" ] && [ -n "$_na" ] && [ "$_na" != "$_oa" ] && break
+    _new=$(getprop "init.svc_debug_pid.$HAL_SVC")
+    [ "$(getprop "init.svc.$HAL_SVC")" = running ] && [ -n "$_new" ] && [ "$_new" != "$_old" ] && break
   done
-  [ $_w -lt 100 ] || return 1
-  # Still the same processes 3 s later: neither is crash-looping.
+  [ $_w -lt 80 ] || return 1
+  # Still the same process 3 s later: it is not crash-looping.
   _w=0; while [ $_w -lt 30 ]; do tick; _w=$((_w + 1)); done
-  [ "$(getprop "init.svc.$HAL_SVC")" = running ] && [ "$(getprop "init.svc_debug_pid.$HAL_SVC")" = "$_nh" ] &&
-    [ "$(getprop "init.svc.$AS_SVC")" = running ] && [ "$(getprop "init.svc_debug_pid.$AS_SVC")" = "$_na" ]
+  [ "$(getprop "init.svc.$HAL_SVC")" = running ] && [ "$(getprop "init.svc_debug_pid.$HAL_SVC")" = "$_new" ]
 }
 
 # live_switch mono|stereo -> 0 when the running system now uses that mode;
@@ -432,7 +374,7 @@ _live_fallback() {
     hal_restart
     log warn "$1 - back on the stock files"
   else
-    log warn "$1 - the stock files could not be put back; the audio services were left running: reboot"
+    log warn "$1 - the stock files could not be put back; the audio HAL was left running: reboot"
   fi
 }
 
@@ -441,7 +383,7 @@ live_switch() {
   # The audio services loaded their files when they last started, so they
   # run what the system shows now; nothing to do if that is already the
   # wanted mode - for every file (an earlier stereo build, or one without
-  # the mixer patch, is replaced live too).
+  # the stereo patch, is replaced live too).
   _now=$1
   for _n in $STEREO_FILES; do
     _spec "$_n"; [ "$1" = stereo ] && _x=$_y
@@ -478,11 +420,11 @@ live_switch() {
     return 1
   fi
   if ! hal_restart; then
-    _live_fallback "live $1: the audio services did not come back"
-    echo "the audio services did not come back on the $1 files"
+    _live_fallback "live $1: the audio HAL did not come back"
+    echo "the audio HAL did not come back on the $1 files"
     return 1
   fi
-  log info "live $1: applied (audio services restarted)"
+  log info "live $1: applied (audio HAL restarted)"
   return 0
 }
 
