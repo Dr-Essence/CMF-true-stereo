@@ -52,7 +52,8 @@ carry such a track in `vendor.audiohal.cmf_swap`; the HAL swaps only those, only
 
 **Verified on the phone**
 - v1.0.2: VLC and the CMF L/R Test app's MOVIE + EFFECT button follow the rotation (the
-  left-only file plays on the side of the earpiece or speaker it should).
+  left-only file plays on the side of the earpiece or speaker it should), and USB Audio Player
+  Pro in bit-perfect mode.
 - v1.0.1: the CMF L/R Test app's four buttons (MUSIC, MOVIE, GAME, SPEECH) and InShot follow
   the rotation; VLC does not (it plays the same side whichever way the phone is turned).
 - v0.9.9 orientation swap by Dirac's tuning: the left-only file in USB Audio Player Pro
@@ -96,9 +97,9 @@ carry such a track in `vendor.audiohal.cmf_swap`; the HAL swaps only those, only
 **Not tested on a phone yet**
 - **v1.0.2**: an app with its own effect in another category (music, game) and an app with no
   effect after VLC (UAPP) in both orientations; only VLC and MOVIE + EFFECT were tried. Not
-  covered by the swap and not yet checked: bit-perfect / hi-res Direct output (UAPP's hi-res
-  driver), compressed offload playback, AAudio MMAP (low-latency games) and float streams:
-  none of them goes through Android's mixer or the HAL function the module patches. Each needs
+  yet checked: compressed offload playback, AAudio MMAP (low-latency games) and float streams
+  (every mixer output on this phone hands the HAL 32-bit integers, `HAL format: 0x3` in the
+  dumps; float could only come through a direct output that asks for it, not seen yet). Each needs
   the left-only file played that way, earpiece on your right. Tested here: the HAL patch in an
   ARM64 emulator (18 cases), the bytes and branch against the assembled code, every earlier
   stereo HAL (v0.9.0-v1.0.1) converting to v1.0.2 and undoing to the exact stock hash on the
