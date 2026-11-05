@@ -41,12 +41,14 @@ nothing.
 
 ## Status
 
-**Current release: v1.0.1** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
+**Current release: v1.0.2** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
 in daily use on the test phone. Mono and Stereo switch without a reboot, and Magisk offers new
-releases as updates. Left and right follow the phone's orientation through Android itself: the
-HAL's own recordings showed that Android already swaps the channels at rotation 270 before the
-HAL, so v1.0.1 removes the module's own swap (which undid it) and the v1.0.0 mixer patch (which
-changed nothing). VLC and YouTube may play reversed with the earpiece on your right (see Pending).
+releases as updates. Left and right follow the phone's orientation. Android swaps the channels
+itself at rotation 270 before the HAL (measured with the HAL's own recordings), except for an
+app whose track has its own audio effect (VLC: its recording showed the left-only beep still
+on the left at 270). v1.0.2 swaps exactly those in the HAL: the daemon reads
+`dumpsys media.audio_flinger` while something plays at rotation 270 and names the outputs that
+carry such a track in `vendor.audiohal.cmf_swap`; the HAL swaps only those, only at 270.
 
 **Verified on the phone**
 - v1.0.1: the CMF L/R Test app's four buttons (MUSIC, MOVIE, GAME, SPEECH) and InShot follow
@@ -90,9 +92,18 @@ changed nothing). VLC and YouTube may play reversed with the earpiece on your ri
 - Hi-res playback (USB Audio Player Pro, Direct 192 kHz) still works in stereo.
 
 **Not tested on a phone yet**
-- **v1.0.1** on the phone: UAPP and a game in both orientations, and YouTube (Flow). Tested here: every earlier stereo HAL (v0.9.5, v0.9.9, v1.0.0)
-  and the stock one patch to the exact v0.9.0-v0.9.4 file on the real files, the undo gives
-  stock back, and the test suite (147 checks).
+- **v1.0.2** on the phone: VLC with the left-only file, earpiece on your right (the speaker
+  should play), and that UAPP and the test app still follow the rotation. Tested here: the HAL
+  patch in an ARM64 emulator (18 cases: swapped only at 270 on a flagged speaker output, 16-
+  and 32-bit; untouched with the property 0, on other outputs, at 90/0, on other devices,
+  float), the bytes and branch checked against the assembled code, every earlier stereo HAL
+  (v0.9.0-v1.0.1, rebuilt from the real stock file with each version's own patch) converts to
+  the v1.0.2 file and undoes to the exact stock hash, and the detector on two real
+  `dumpsys media.audio_flinger` captures from the phone (InShot playing with VLC paused: none;
+  UAPP playing: none; the same capture with VLC's track active: the deep-buffer output, 8).
+  156 checks under sh, dash, mksh and busybox. Not tested: the daemon writing the property on
+  the phone, and how quickly it follows (up to one 2 s cycle after playback starts or the
+  phone turns).
 - v0.9.8 Action button: Magisk's **Action** on the module's card switches Mono <-> Stereo
   through `stereoctl channels` and prints its output. Checked: the script parses under
   dash, mksh and busybox and is packaged; not yet pressed on the phone.
@@ -118,10 +129,8 @@ changed nothing). VLC and YouTube may play reversed with the earpiece on your ri
 - How the speaker holds up to long, loud stereo listening without Awinic's protection.
 
 **Pending**
-- VLC and YouTube with the earpiece on your right: earlier (v0.9.9) VLC came out right only with
-  the module's swap on, so Android may not swap its stream. Needs one HAL recording of VLC
-  playing the left-only file at rotation 270 (CMF L/R Test, DRIVER RECORDING) to see what
-  reaches the HAL, and what sets it apart from the apps Android does swap.
+- If an app with its own effect and an ordinary app play on the same output at the same time,
+  one of them is reversed at rotation 270 (the HAL sees only the mixed stream). Not seen yet.
 - Speaker limiter, earpiece boost and EQ (asked for; design stage). Where it can run: the
   HAL's playback path calls `doStereoToMonoConversionIfNeed` (our swap) for every speaker
   stream, including USB Audio Player Pro's direct hi-res output, before the DSP, which runs
@@ -146,6 +155,10 @@ changed nothing). VLC and YouTube may play reversed with the earpiece on your ri
 - `ADDA_DL_MAX_VOL` was tried for a louder earpiece: no clear difference, left out.
 
 **Fixed recently**
+- v1.0.2: VLC did not follow the rotation in v1.0.1. Measured: the CMF L/R Test app's MOVIE
+  button with a Dynamics Processing effect on its own session (what VLC does) reached the HAL
+  unswapped at rotation 270 (the beep stayed left), the same button without it swapped. The
+  HAL now swaps only the outputs carrying such a track (see the top of Status).
 - v1.0.1: v1.0.0 played reversed in both orientations. Measured with the HAL's own recordings
   (`vendor.streamout.pcm.dump`, CMF L/R Test FULL CHECK): a left-only beep reaches the HAL on
   the right channel at rotation 270 and on the left at 90, in all four Dirac tunings, and from
@@ -439,10 +452,15 @@ the new build has been checked.
   left slot on the next stream, so in stereo the speaker would play the left
   channel alone. Switch to mono if you want the module off.
 - **Orientation**: turned with the earpiece on your right, Android itself swaps left and
-  right before the audio HAL (it sends the rotation to its mixer and the HAL, and the HAL's own
-  recordings show the channels already swapped at rotation 270). The module adds nothing here.
-  v0.9.5-v1.0.0 swapped in the HAL as well, and tried to guess when not to (by output, by Dirac
-  tuning, then by patching the mixer); each rule held only for the apps it was tested with.
+  right before the audio HAL (the HAL's own recordings show the channels already swapped at
+  rotation 270), except for a track whose session has its own audio effect chain (VLC's
+  Dynamics Processing): that one reaches the HAL unswapped. The daemon finds such tracks in
+  `dumpsys media.audio_flinger` (only while playing at rotation 270: when playback starts, when
+  the phone turns, and every third 2 s cycle) and writes the output flags of their mixer
+  threads to `vendor.audiohal.cmf_swap`; the HAL swaps a speaker stream only when the
+  rotation (`vendor.audiohal.cmf_rotation`, stored by the HAL from Android's `rotation`
+  parameter) is 270 and its output is named there. v0.9.5-v1.0.0 swapped by output, by Dirac
+  tuning, then by patching the mixer; each rule held only for the apps it was tested with.
 
 MediaTek's "2nd loudspeaker" machinery **is** present on this build, in
 `/vendor/etc/audio_param/`:

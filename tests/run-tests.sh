@@ -487,16 +487,20 @@ _OHAL_DIR=$HAL_DIR; _OAUR=$AUR; _OHS=$HAL_STOCK; _OHX=$HAL_STEREO; _OAS=$AUR_STO
 HAL_DIR=$K/hw; AUR=$K/etc/aurisys_config_rv.xml; LIVE_ROOT=; STOCKDIR=$K/stockcopy
 cp "$K/stock.so" "$K/cur.so"; _patch_hal "$K/cur.so"
 HAL_STOCK=$(_sha "$K/stock.so"); HAL_STEREO=$(_sha "$K/cur.so")
-check "the patch writes 16 bytes (15 of them differ from stock)" "$(cmp -l "$K/stock.so" "$K/cur.so" | wc -l | tr -d ' ')" "15"
+# Every changed byte is in one of the four spots (body, branch, two nops).
+check "the patch changes only its four spots" "$(cmp -l "$K/stock.so" "$K/cur.so" | awk '{ o = $1 - 1
+  if (!((o >= 2603040 && o < 2603040 + 432) || (o >= 2459584 && o < 2459588) || (o >= 2618068 && o < 2618072) || (o >= 1968640 && o < 1968644))) bad++ }
+  END { print (NR > 0 && !bad) ? "yes" : "no" }')" "yes"
 cp "$K/cur.so" "$K/hw/audio.primary.mt6878.so"; cp "$K/cur.so" "$K/hw/audio.primary.mediatek.so"
 _patch_aurisys "$K/stock.xml" "$K/etc/aurisys_config_rv.xml"
 AUR_STOCK=$(_sha "$K/stock.xml"); AUR_STEREO=$(_sha "$AUR")
 check "undone exactly" "$(cp "$K/cur.so" "$K/un.so"; _unpatch_hal "$K/un.so"; _sha "$K/un.so")" "$HAL_STOCK"
-# v0.9.5-v1.0.0: a swap body (up to 432 bytes) and a setParameters branch in
+# v0.9.0-v1.0.1: a swap body (or none) (up to 432 bytes) and a setParameters branch in
 # the same spots; the patch writes every one of those bytes back.
 cp "$K/cur.so" "$K/v2.so"; head -c 432 /dev/urandom | dd of="$K/v2.so" bs=1 seek=2603040 conv=notrunc 2>/dev/null
 printf '\110\214\000\024' | dd of="$K/v2.so" bs=1 seek=2459584 conv=notrunc 2>/dev/null
-check "v0.9.5-v1.0.0 stereo patches straight to the current one" "$(_patch_hal "$K/v2.so" && _sha "$K/v2.so")" "$HAL_STEREO"
+check "v0.9.0-v1.0.1 stereo patches straight to the current one" "$(_patch_hal "$K/v2.so" && _sha "$K/v2.so")" "$HAL_STEREO"
+check "an earlier stereo HAL is undone exactly too" "$(cp "$K/v2.so" "$K/un2.so"; head -c 432 /dev/urandom | dd of="$K/un2.so" bs=1 seek=2603040 conv=notrunc 2>/dev/null; _unpatch_hal "$K/un2.so"; _sha "$K/un2.so")" "$HAL_STOCK"
 check "rebuilt from a stereo boot" "$(save_stock && echo ok)" "ok"
 check "HAL back to the stock hash" "$(_sha "$STOCKDIR/audio.primary.mediatek.so")" "$HAL_STOCK"
 check "DSP config back to the stock hash" "$(_sha "$STOCKDIR/aurisys_config_rv.xml")" "$AUR_STOCK"
@@ -529,6 +533,42 @@ unstage_stereo
 check "unstaged: nothing left" "$(ls "$K/ov/hw" "$K/ov/etc" 2>/dev/null | grep -c -E 'so|xml')" "0"
 OV_HAL=$_OOVH; OV_ETC=$_OOVE
 HAL_DIR=$_OHAL_DIR; AUR=$_OAUR; HAL_STOCK=$_OHS; HAL_STEREO=$_OHX; AUR_STOCK=$_OAS; AUR_STEREO=$_OAX; LIVE_ROOT=$_OLR; STOCKDIR=$_OSD
+
+echo "own-effect outputs (dumpsys media.audio_flinger, recorded on the phone)"
+F=$ROOT/tests/fixtures
+check "InShot playing, VLC paused with its effect: none" "$(own_effect_outputs < "$F/af-inshot-playing.txt")" "0"
+check "UAPP playing on primary, VLC's chain idle: none" "$(own_effect_outputs < "$F/af-uapp-playing.txt")" "0"
+sed '/^             66     no   24412/s/ no / yes/' "$F/af-inshot-playing.txt" > "$TMP/af-vlc.txt"
+check "VLC playing with its own effect: deep buffer (8)" "$(own_effect_outputs < "$TMP/af-vlc.txt")" "8"
+sed '/^             73    yes   22914/s/ 8201 / 8137 /' "$TMP/af-vlc.txt" > "$TMP/af-two.txt"
+check "two own-effect tracks on one thread: still 8" "$(own_effect_outputs < "$TMP/af-two.txt")" "8"
+check "empty dump (audioserver busy): nothing printed" "$(printf '' | own_effect_outputs)" ""
+check "VLC's chain on session 0 only: none" "$(sed 's/effects for session 8137/effects for session 0/' "$TMP/af-vlc.txt" | own_effect_outputs)" "0"
+mkdir -p "$TMP/pbin"
+cat > "$TMP/pbin/dumpsys" <<SH
+#!/bin/sh
+cat "$TMP/af-vlc.txt"
+SH
+cat > "$TMP/pbin/getprop" <<SH
+#!/bin/sh
+cat "$TMP/prop" 2>/dev/null
+SH
+cat > "$TMP/pbin/setprop" <<SH
+#!/bin/sh
+echo "\$2" > "$TMP/prop"; echo x >> "$TMP/writes"
+SH
+chmod +x "$TMP/pbin/"*
+_OP=$PATH; PATH=$TMP/pbin:$PATH
+_rp=$(command -v resetprop || true)
+if [ -z "$_rp" ]; then
+  swap_outputs_update
+  check "property written from the dump" "$(cat "$TMP/prop")" "8"
+  swap_outputs_update
+  check "same value: not written again" "$(wc -l < "$TMP/writes" | tr -d ' ')" "1"
+else
+  ok "skip - resetprop present on this host"
+fi
+PATH=$_OP
 
 echo "live switching"
 # Real bind mounts over fake vendor files; getprop/setprop/dumpsys stand in for

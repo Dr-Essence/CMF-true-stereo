@@ -61,6 +61,8 @@ update_description
 applied=0
 was_playing=0
 atten_tick=0
+swap_tick=0
+last_rot=
 
 while true; do
   # Re-read config each cycle so stereoctl edits take effect without a reboot.
@@ -106,6 +108,21 @@ while true; do
       atten_tick=10
     fi
     atten_tick=$((atten_tick - 1))
+    # Apps whose track has its own effect (VLC): Android does not swap them
+    # with the rotation, the HAL does, on the outputs named here. Only
+    # needed at rotation 270, so the dump runs only then: when playback
+    # starts, when the phone turns to 270, and every 3rd cycle.
+    if [ $_pb -eq 1 ]; then
+      _rot=$(getprop "$ROT_PROP")
+      if [ "$_rot" = 270 ]; then
+        if [ $was_playing -eq 0 ] || [ "$last_rot" != 270 ] || [ $swap_tick -le 0 ]; then
+          swap_outputs_update
+          swap_tick=3
+        fi
+        swap_tick=$((swap_tick - 1))
+      fi
+      last_rot=$_rot
+    fi
     was_playing=$_pb
     # Idle: nothing to hold, and no point waking the amp's I2C bus.
     if [ $applied -eq 1 ]; then

@@ -35,19 +35,22 @@
 HAL_NAMES="audio.primary.mt6878.so audio.primary.mediatek.so"
 HAL_DIR=/vendor/lib64/hw
 HAL_STOCK=28db2e24e9d4c4f88a67a7631ab581fa064bb03a47a87314b7599a2cb757a324
-# Stereo: the fold returns at once and nothing else in the stream changes.
-# Measured with the HAL's own recordings (vendor.streamout.pcm.dump): Android
-# already swaps left and right with the rotation before the HAL (a left-only
-# beep reached it on the right at rotation 270, on the left at 90, in all four
-# Dirac tunings and from USB Audio Player Pro), so a swap here only undid it.
-# This is the v0.9.0-v0.9.4 build, the one that was tested first.
-HAL_STEREO=2615f6e28e40a0520f6122e03513f374294e011fa3c654801e898f5ea62a5edf
+# Stereo: the fold returns at once, and the orientation swap below runs for
+# the streams Android leaves unswapped. Measured with the HAL's own
+# recordings (vendor.streamout.pcm.dump): Android already swaps left and
+# right with the rotation before the HAL (a left-only beep reached it on the
+# right at rotation 270, on the left at 90, in all four Dirac tunings and
+# from USB Audio Player Pro), except for a track whose session has its own
+# effect chain (VLC, the test app's MOVIE + EFFECT: the beep stayed left).
+HAL_STEREO=ecd4aa34694fd3e09d964c5271ae702c086cec8bcefa89ace93461ba398ca397
+# v0.9.0-v0.9.4 and v1.0.1 stereo (no swap of its own): patched again in place.
+HAL_STEREO_V1=2615f6e28e40a0520f6122e03513f374294e011fa3c654801e898f5ea62a5edf
 # v1.0.0 stereo (swap on every output): patched again in place.
 HAL_STEREO_V4=8521fadc4ccb85e3a7f1f001519818f6ece720b22faa03f090826546c43b05dc
 # v0.9.9 stereo (swap skipped in Dirac's MUSIC tuning): patched again in place.
 HAL_STEREO_V3=c1f3dd1f02bd4afc34ab0dd76f8900ad3577893bfcae8b7f2a3c81946c61bd2c
 # v0.9.5-v0.9.8 stereo (skipped the primary output, not Dirac's MUSIC tuning):
-# patched again in place, which gives the current one.
+# patched again in place.
 HAL_STEREO_V2=58a5755e0203183ad7fa541528305a3040f204e503528ad9182f4118fe1368d9
 
 AUR=/vendor/etc/aurisys_config_rv.xml
@@ -73,28 +76,38 @@ _spec() {
 
 _sha() { sha256sum "$1" 2>/dev/null | cut -d' ' -f1; }
 
-# Patch a stock HAL copy in place (16 bytes in three spots):
-#   0x27b820 doStereoToMonoConversionIfNeed: returns at once (no fold to mono)
+# Patch a stock HAL copy in place (four spots):
+#   0x27b820 doStereoToMonoConversionIfNeed: replaced by the orientation swap
+#            and the rotation store (hal-swap/patch.S, 284 bytes, assembled and
+#            tested in an ARM64 emulator: hal-swap/run.sh). No fold to mono;
+#            left and right are swapped only for the speaker streams the
+#            daemon flags in vendor.audiohal.cmf_swap, at rotation 270
+#   0x2587c0 setParameters, "rotation" key: b to the rotation store, which
+#            keeps the value in vendor.audiohal.cmf_rotation (the stock HAL
+#            only drops it) and returns
 #   0x27f2d4 InitArsiTaskConfig         b.ne -> nop (always set hw_info 0x4)
 #   0x1e0a00 SetArsiTaskConfig          b.ne -> nop (same, DSP stream manager)
-# First the stock bytes are written back where v0.9.5-v1.0.0 put the
-# orientation swap (432 bytes at 0x27b820) and its setParameters branch
-# (0x2587c0), so any earlier stereo HAL patches to the same file.
+# The stock bytes of the first two spots (432 bytes, the longest earlier body,
+# and the branch) are written first, so any earlier stereo HAL patches to the
+# same file, and _unpatch_hal gives back the stock file from any of them.
 HAL_STOCK_REGION='\377\003\002\321\375\173\004\251\370\137\005\251\366\127\006\251\364\117\007\251\375\003\001\221\127\320\073\325\365\003\000\252\350\026\100\371\363\003\002\252\364\003\001\252\250\203\037\370\000\014\100\371\243\225\003\224\366\003\000\052\037\004\000\161\241\002\000\124\250\022\100\371\340\203\000\221\001\141\007\221\264\212\003\224\350\047\102\251\037\001\011\353\000\001\000\124\012\001\100\271\137\011\000\161\240\000\000\124\010\021\000\221\037\001\011\353\141\377\377\124\007\000\000\024\037\001\011\353\240\000\000\124\070\000\200\122\340\023\100\371\340\002\000\265\037\000\000\024\250\022\100\371\001\141\007\221\340\043\000\221\240\212\003\224\340\243\100\251\010\001\000\353\340\000\000\124\037\021\000\361\250\000\000\124\010\000\100\271\037\005\000\161\370\027\237\032\003\000\000\024\200\001\000\264\370\003\037\052\340\013\000\371\077\212\003\224\337\006\000\161\201\001\000\124\340\023\100\371\100\001\000\264\340\027\000\371\071\212\003\224\030\001\000\067\051\000\000\024\337\006\000\161\341\004\000\124\370\003\037\052\340\023\100\371\000\377\377\265\170\004\000\064\250\022\100\371\010\001\100\271\037\015\000\161\100\002\000\124\037\005\000\161\241\003\000\124\223\003\000\264\037\040\003\325\210\002\100\171\163\022\000\361\211\006\100\171\010\075\110\013\051\075\111\013\010\075\000\023\051\075\001\023\050\005\210\013\210\002\000\171\210\006\000\171\224\022\000\221\241\376\377\124\016\000\000\024\263\001\000\264\037\040\003\325\037\040\003\325\210\046\100\051\037\001\000\161\010\245\210\032\077\001\000\161\051\245\211\032\163\042\000\361\051\175\001\023\050\005\210\013\210\042\201\050\341\376\377\124\350\026\100\371\251\203\137\370\037\001\011\353\241\002\000\124\340\003\037\052\364\117\107\251'
 HAL_STOCK_B='\041\011\000\260'
+HAL_SWAP_BODY='\375\173\275\251\375\003\000\221\363\123\001\251\365\023\000\371\363\003\000\252\364\003\001\252\365\003\002\252\150\022\100\371\350\004\000\264\011\251\135\251\113\001\011\313\177\021\000\361\141\004\000\124\053\001\100\271\177\011\000\161\001\004\000\124\040\005\000\020\341\003\037\052\342\213\003\224\037\070\004\161\141\003\000\124\140\005\000\060\341\003\037\052\335\213\003\224\150\022\100\371\011\015\100\271\037\000\011\152\200\002\000\124\010\001\100\271\037\015\000\161\140\001\000\124\037\005\000\161\341\001\000\124\251\376\102\323\251\001\000\264\212\002\100\271\112\101\212\023\212\106\000\270\051\005\000\361\201\377\377\124\007\000\000\024\251\376\103\323\251\000\000\264\212\056\100\051\213\052\201\050\051\005\000\361\241\377\377\124\340\003\037\052\365\023\100\371\363\123\101\251\375\173\303\250\300\003\137\326\341\343\101\371\200\000\000\020\362\235\003\224\001\010\000\320\261\163\377\027\166\145\156\144\157\162\056\141\165\144\151\157\150\141\154\056\143\155\146\137\162\157\164\141\164\151\157\156\000\166\145\156\144\157\162\056\141\165\144\151\157\150\141\154\056\143\155\146\137\163\167\141\160\000\000\000'
+HAL_SWAP_B='\114\214\000\024'
 _patch_hal() {
   printf "$HAL_STOCK_REGION" | dd of="$1" bs=1 seek=2603040 conv=notrunc 2>/dev/null &&
-  printf "$HAL_STOCK_B" | dd of="$1" bs=1 seek=2459584 conv=notrunc 2>/dev/null &&
-  printf '\340\003\037\052\300\003\137\326' | dd of="$1" bs=1 seek=2603040 conv=notrunc 2>/dev/null &&
+  printf "$HAL_SWAP_BODY" | dd of="$1" bs=1 seek=2603040 conv=notrunc 2>/dev/null &&
+  printf "$HAL_SWAP_B" | dd of="$1" bs=1 seek=2459584 conv=notrunc 2>/dev/null &&
   printf '\037\040\003\325' | dd of="$1" bs=1 seek=2618068 conv=notrunc 2>/dev/null &&
   printf '\037\040\003\325' | dd of="$1" bs=1 seek=1968640 conv=notrunc 2>/dev/null
 }
 
-# The reverse of the stereo patch: the stock bytes at its three spots (16
-# bytes). Verified: applied to the stereo build it gives back the stock
+# The reverse of every stereo patch, this one and the earlier ones: the stock
+# bytes at all four spots. Verified on each build: it gives back the stock
 # build's exact hash.
 _unpatch_hal() {
-  printf '\377\003\002\321\375\173\004\251' | dd of="$1" bs=1 seek=2603040 conv=notrunc 2>/dev/null &&
+  printf "$HAL_STOCK_REGION" | dd of="$1" bs=1 seek=2603040 conv=notrunc 2>/dev/null &&
+  printf "$HAL_STOCK_B" | dd of="$1" bs=1 seek=2459584 conv=notrunc 2>/dev/null &&
   printf '\201\000\000\124' | dd of="$1" bs=1 seek=2618068 conv=notrunc 2>/dev/null &&
   printf '\201\000\000\124' | dd of="$1" bs=1 seek=1968640 conv=notrunc 2>/dev/null
 }
@@ -133,6 +146,55 @@ stereo_active() {
   grep -q "$AUR_MARK" "$(_view "$AUR")" 2>/dev/null
 }
 
+# Streams Android leaves unswapped. Android swaps left and right at rotation
+# 270 before the HAL, except for a track whose session has its own effect
+# chain (VLC's Dynamics Processing; measured with the HAL's recordings). The
+# HAL swaps those itself (_patch_hal) on the outputs named here: the OR of
+# the output flags of every mixer thread that plays such a track right now,
+# read from dumpsys media.audio_flinger (stdin). Prints nothing when the dump
+# has no output thread (audioserver busy or restarting), so nothing is
+# changed on a failed read. Session 0 (the output mix: Dirac, ViPER) is not
+# a track's own chain.
+SWAP_PROP=vendor.audiohal.cmf_swap
+ROT_PROP=vendor.audiohal.cmf_rotation
+own_effect_outputs() {
+  awk '
+    function bor(a, b,  r, p) { r = 0; p = 1
+      while (a > 0 || b > 0) { if (a % 2 == 1 || b % 2 == 1) r += p; a = int(a / 2); b = int(b / 2); p *= 2 }
+      return r }
+    function flush(  s) {
+      if (fl != "") for (s in act) if (s in ch) m = bor(m, fl)
+      split("", act); split("", ch); fl = ""; intr = 0 }
+    BEGIN { m = 0; fl = ""; seen = 0 }
+    /^[A-Z][A-Za-z]* thread 0x/ { flush(); if ($1 == "Output") seen = 1; next }
+    /^Patches:/ { flush(); next }
+    /^  AudioStreamOut: / {
+      for (i = 1; i < NF; i++) if ($i == "flags") fl = $(i + 1)
+      if (fl !~ /^0x[0-9A-Fa-f]+$/) { fl = ""; next }
+      h = tolower(substr(fl, 3)); fl = 0
+      for (j = 1; j <= length(h); j++) fl = fl * 16 + index("0123456789abcdef", substr(h, j, 1)) - 1
+      next }
+    / Tracks of which / { intr = 1; next }
+    / Effect Chains$/ { intr = 0; next }
+    intr && $2 == "yes" && $5 ~ /^[0-9]+$/ { act[$5] = 1; next }
+    intr && $3 == "yes" && $6 ~ /^[0-9]+$/ { act[$6] = 1; next }
+    /^    [0-9]+ effects for session [0-9]+$/ { if ($NF + 0 > 0) ch[$NF] = 1; next }
+    END { flush(); if (seen) print m }
+  '
+}
+
+# Re-read which outputs the HAL swaps; writes the property only on a change.
+swap_outputs_update() {
+  _m=$(timeout 5 dumpsys media.audio_flinger 2>/dev/null | own_effect_outputs)
+  [ -n "$_m" ] || return 1
+  [ "$(getprop "$SWAP_PROP")" = "$_m" ] && return 0
+  if command -v resetprop >/dev/null 2>&1; then
+    resetprop -n "$SWAP_PROP" "$_m"
+  else
+    setprop "$SWAP_PROP" "$_m"
+  fi && log info "stereo: own-effect outputs now $_m (swapped by the HAL at rotation 270)"
+}
+
 stereo_staged() {
   [ -f "$OV_ETC/aurisys_config_rv.xml" ]
 }
@@ -148,7 +210,7 @@ build_known() {
     _f=$(_view "$HAL_DIR/$_n")
     [ -f "$_f" ] || return 2
     case $(_sha "$_f") in
-      "$HAL_STOCK"|"$HAL_STEREO"|"$HAL_STEREO_V4"|"$HAL_STEREO_V3"|"$HAL_STEREO_V2") ;;
+      "$HAL_STOCK"|"$HAL_STEREO"|"$HAL_STEREO_V4"|"$HAL_STEREO_V3"|"$HAL_STEREO_V2"|"$HAL_STEREO_V1") ;;
       *) return 1 ;;
     esac
   done
@@ -189,7 +251,7 @@ stage_stereo() {
     case $_h in
       "$HAL_STOCK")  _patch_hal "$_tmp/$_n" || { _fail="patching $_n failed"; break; } ;;
       "$HAL_STEREO") ;;   # already ours (overlay mounted): keep as is
-      "$HAL_STEREO_V2"|"$HAL_STEREO_V3"|"$HAL_STEREO_V4")   # v0.9.5-v1.0.0: the patch rewrites every spot they changed
+      "$HAL_STEREO_V1"|"$HAL_STEREO_V2"|"$HAL_STEREO_V3"|"$HAL_STEREO_V4")   # v0.9.0-v1.0.1: the patch rewrites every spot they changed
         _patch_hal "$_tmp/$_n" || { _fail="converting the earlier stereo $_n failed"; break; } ;;
       *) _fail="$_src is not the analysed build ($_h) - refusing to patch an unknown binary"; break ;;
     esac
