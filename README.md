@@ -50,6 +50,7 @@ every way apps play sound on this phone. "While playing" engages the earpiece fo
 music alike. The full history of findings, tests and fixes is in [CHANGELOG.md](CHANGELOG.md).
 
 **Verified on the phone**
+- v1.0.5 earpiece leveller: a clear difference on the earpiece side, with no distortion heard.
 - Stereo: a left-only file plays on the earpiece only, the speaker's right slot silent, with
   Dirac on and off. Mono: both play the full mix.
 - Switching Mono and Stereo at once (audio HAL restart, no reboot) from `stereoctl channels`,
@@ -66,15 +67,6 @@ music alike. The full history of findings, tests and fixes is in [CHANGELOG.md](
 - Earpiece at the receiver amp's top step (+8 dB); hi-res playback still works in stereo.
 
 **Not tested on a phone yet**
-- **v1.0.5 earpiece leveller** (`stereoctl protect leveller`, both apps; off by default):
-  raises the earpiece's quiet and medium passages towards -18 dBFS of loudness by at most
-  4 / 8 / 12 dB (light / medium / strong), leaves near-silence (below -60 dBFS) alone, changes
-  no frequency, and keeps peaks at the earpiece's ceiling. Needs on the phone: a listen with
-  dynamic music (film, classical) at each strength. Tested here: 7 new host tests (a -40 dBFS
-  passage raised by exactly 12 dB at strong and 4 dB at light, -6 dBFS and -75 dBFS left
-  alone, a sudden loud passage after a quiet one still held at -2.5 dBFS, -0.1 dBFS with the
-  limiter off, the speaker untouched), the same gain from 50 Hz to 3 kHz with no added
-  distortion, the NDK build, 194 module checks in four shells.
 - Boost 6 over a longer listen (it was tried briefly with the other settings).
 - The protection after a live switch from a mono boot: by design it starts only after a
   reboot (the library is not in place until then; stereo plays as v1.0.3, boost ignored).
