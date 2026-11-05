@@ -485,10 +485,16 @@ case ${1:-status} in
   ctl)     shift; cmd_ctl "$@" ;;
   dump)    cmd_dump ;;
   diff)    cmd_diff "$2" ;;
-  channels) cmd_channels "$2"; _rc=$?; [ -n "${2:-}" ] && update_description; exit $_rc ;;
+  channels) cmd_channels "$2"; _rc=$?; [ -n "${2:-}" ] && { update_description; notify_apps; }; exit $_rc ;;
   protect)  cmd_protect "$2" "$3" ;;
   xml-patch)  sh "$MODDIR/scripts/xml_patch.sh" patch ;;
   xml-revert) sh "$MODDIR/scripts/xml_patch.sh" revert ;;
   -h|--help|help) usage ;;
   *)       echo "unknown command: $1"; echo; usage; exit 1 ;;
+esac
+
+# A command that changed something: the apps (and Nothing Settings) follow.
+case ${1:-status} in
+  on|off|reset|solo|unsolo|restart) notify_apps ;;
+  guard|protect) [ -n "${2:-}" ] && notify_apps ;;
 esac

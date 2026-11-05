@@ -198,6 +198,25 @@ ctl_set() {
 }
 
 ##############################################################################
+# telling the apps
+#
+# CMF Stereo (both editions) shows the module's state in Nothing Settings
+# from what it last read, so Settings never needs a root call to show it. A
+# change made outside the apps (stereoctl, Magisk's Action button, the
+# daemon's own switch back to mono) is announced here: each installed app's
+# provider is asked to read the state again, and Settings updates at once.
+# In the background and silent: an app that is not installed changes nothing.
+##############################################################################
+CMF_APPS="com.tiimoo.cmfstereo com.tiimoo.cmfstereo.clean"
+notify_apps() {
+  command -v content >/dev/null 2>&1 || return 0
+  for _p in $CMF_APPS; do
+    ( content call --uri "content://$_p.settingstile" --method stateChanged >/dev/null 2>&1 & )
+  done
+  return 0
+}
+
+##############################################################################
 # playback detection
 ##############################################################################
 

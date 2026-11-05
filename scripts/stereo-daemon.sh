@@ -57,6 +57,7 @@ else
   amp_release_atten
 fi
 update_description
+notify_apps
 
 applied=0
 was_playing=0
@@ -114,6 +115,7 @@ while true; do
       live_switch mono >/dev/null 2>&1 || log warn "live switch to mono failed: mono after a reboot"
       rm -f "$HALWATCH"
       update_description
+      notify_apps
       nap "${WATCH_INTERVAL:-2}"
       continue
     fi

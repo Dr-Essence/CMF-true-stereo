@@ -689,6 +689,21 @@ else
 fi
 PATH=$_OP
 
+echo "telling the apps"
+mkdir -p "$TMP/cbin"
+cat > "$TMP/cbin/content" <<SH
+#!/bin/sh
+echo "\$*" >> "$TMP/content.log"
+SH
+chmod +x "$TMP/cbin/content"
+_OP=$PATH; PATH=$TMP/cbin:$PATH; rm -f "$TMP/content.log"
+notify_apps; sleep 1
+check "both apps asked to read the state again" "$(grep -c -- '--method stateChanged' "$TMP/content.log")" "2"
+check "clean edition's provider" "$(grep -c 'content://com.tiimoo.cmfstereo.clean.settingstile' "$TMP/content.log")" "1"
+PATH=$_OP
+check "stereoctl announces changes" "$(grep -c 'notify_apps' "$ROOT/scripts/stereoctl")" "3"
+check "the daemon announces its own switch to mono and its start" "$(grep -c 'notify_apps' "$ROOT/scripts/stereo-daemon.sh")" "2"
+
 echo "live switching"
 # Real bind mounts over fake vendor files; getprop/setprop/dumpsys stand in for
 # init's audio HAL service. Needs root (mount): skipped when not available.

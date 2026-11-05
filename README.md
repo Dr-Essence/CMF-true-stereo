@@ -42,7 +42,7 @@ nothing.
 
 ## Status
 
-**Current release: v1.0.5** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is in
+**Current release: v1.0.6** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is in
 daily use on the test phone, with the module's own protection running in the audio HAL (deep
 bass guard, earpiece limiter, optional speaker boost and earpiece leveller). Mono and Stereo switch without a reboot,
 and Magisk offers new releases as updates. Left and right follow the phone's orientation for
@@ -67,6 +67,12 @@ music alike. The full history of findings, tests and fixes is in [CHANGELOG.md](
 - Earpiece at the receiver amp's top step (+8 dB); hi-res playback still works in stereo.
 
 **Not tested on a phone yet**
+- **v1.0.6** telling the apps: after a change made outside CMF Stereo (`stereoctl`,
+  Magisk's Action button, the daemon's switch back to mono, and once when the daemon starts)
+  the module asks each installed app to read the state again (`content call ...
+  --method stateChanged`), so Nothing Settings' Stereo speakers page and Sound row follow at
+  once. Tested here: both apps' providers called (a stand-in `content`), 198 checks in four
+  shells.
 - Boost 6 over a longer listen (it was tried briefly with the other settings).
 - The protection after a live switch from a mono boot: by design it starts only after a
   reboot (the library is not in place until then; stereo plays as v1.0.3, boost ignored).
