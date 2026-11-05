@@ -40,7 +40,7 @@ nothing.
 
 ## Status
 
-**Current release: v0.9.6** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
+**Current release: v0.9.7** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
 in daily use on the test phone. Mono and Stereo switch without a reboot, left and right
 follow the phone's orientation, and Magisk offers new releases as updates.
 
@@ -66,11 +66,11 @@ follow the phone's orientation, and Magisk offers new releases as updates.
 - Hi-res playback (USB Audio Player Pro, Direct 192 kHz) still works in stereo.
 
 **Not tested on a phone yet**
-- v0.9.6 update button: `module.prop` points Magisk at `update.json`, which the release workflow
-  moves to each new version after its zip is published. Seen working only once a later release
-  (v0.9.7) is out: Magisk should then show Update for this module.
-- Author shown in Magisk: `module.prop` now says Dr.Essence (was Tiimoo-debug); Magisk shows
-  it once the next release (v0.9.7) is installed.
+- The update button, with v0.9.6 installed: v0.9.7 is the first release after the one that
+  added `updateJson`. On v0.9.6 Magisk showed no Update button, which is expected while
+  `update.json` still named v0.9.6. Once the v0.9.7 workflow moves `update.json` on, Magisk's
+  Modules page (pulled down to refresh) should show Update for this module.
+- v0.9.7 author: Magisk should list the module as by Dr.Essence (was Tiimoo-debug).
 - The orientation swap with Nothing's Dirac switched off: apps on the primary output are then
   not swapped (known limit; nothing swaps them).
 - Live switching from the app's Mono/Stereo buttons (needs the next app build).
@@ -99,6 +99,7 @@ follow the phone's orientation, and Magisk offers new releases as updates.
 - `ADDA_DL_MAX_VOL` was tried for a louder earpiece: no clear difference, left out.
 
 **Fixed recently**
+- v0.9.7: the module was still listed in Magisk as by Tiimoo-debug; it now says Dr.Essence.
 - v0.9.6: Magisk showed an out-of-date module description (Stereo "needs a reboot").
 - v0.9.5: turned with the earpiece on your right, left and right came out reversed.
 - v0.9.4: switching Mono and Stereo needed a reboot; it now restarts only the audio HAL.
