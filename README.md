@@ -119,9 +119,15 @@ back safely, and decides the orientation swap by Nothing's Dirac tuning instead 
 **Pending**
 - InShot (forced to landscape with a rotation-control app) plays reversed with the earpiece on
   your right: right only with the module's swap off, although Dirac read MOVIE throughout
-  (measured), where VLC is right with it on. Dirac writes `persist.vendor.newdirac.cur.config`
-  on every tuning change (`DiracSound_command`, checked in `libdiraceffect_NT.so`), so the
-  value is not stale; what else swaps InShot is not known yet. Possible fix if more apps turn
+  (measured), where VLC is right with it on. InShot (`com.camerasideas.instashot`) is on
+  Nothing's video list, so MOVIE is the expected tuning, and Dirac writes
+  `persist.vendor.newdirac.cur.config` on every tuning change (`DiracSound_command`, checked in
+  `libdiraceffect_NT.so`): it was not GAME. InShot's track is set up like VLC's (deep buffer,
+  content type unknown, same effects). Not known yet what swaps it; it is the only test that
+  forced the screen rotation with another app. Dirac's tuning file (`interface.json`,
+  `dirac_resource.dar`) gives MUSIC, MOVIE, GAME and SPEECH the same processing blocks and no
+  rotation parameter, so how MUSIC follows the rotation is not known either; measured, it does
+  (UAPP and Wave Launcher's player, both MUSIC, come out right with the module not swapping). Possible fix if more apps turn
   up: a list of apps the swap leaves alone.
 - Speaker limiter, earpiece boost and EQ (asked for; design stage). Where it can run: the
   HAL's playback path calls `doStereoToMonoConversionIfNeed` (our swap) for every speaker
