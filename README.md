@@ -45,6 +45,8 @@ in daily use on the test phone. Mono and Stereo switch without a reboot, left an
 follow the phone's orientation, and Magisk offers new releases as updates.
 
 **Verified on the phone**
+- Magisk's Update button: with v0.9.6 installed, Magisk showed **Update** for this module
+  once v0.9.7 was out and `update.json` named it (before that it rightly showed none).
 - v0.9.5 orientation swap: the left-only test file in VLC (deep-buffer output) and in USB Audio
   Player Pro (primary output, where Nothing's Dirac does the swap): earpiece on your left, the
   earpiece plays; on your right, the speaker plays. The first build cancelled Dirac's own swap
@@ -66,11 +68,10 @@ follow the phone's orientation, and Magisk offers new releases as updates.
 - Hi-res playback (USB Audio Player Pro, Direct 192 kHz) still works in stereo.
 
 **Not tested on a phone yet**
-- The update button, with v0.9.6 installed: v0.9.7 is the first release after the one that
-  added `updateJson`. On v0.9.6 Magisk showed no Update button, which is expected while
-  `update.json` still named v0.9.6. Once the v0.9.7 workflow moves `update.json` on, Magisk's
-  Modules page (pulled down to refresh) should show Update for this module.
-- v0.9.7 author: Magisk should list the module as by Dr.Essence (was Tiimoo-debug).
+- v0.9.7 author after updating: Magisk should list the module as by Dr.Essence (was
+  Tiimoo-debug); the published zip's `module.prop` was checked.
+- Installing an update from Magisk's Update button and rebooting (button seen; install not
+  reported yet).
 - The orientation swap with Nothing's Dirac switched off: apps on the primary output are then
   not swapped (known limit; nothing swaps them).
 - Live switching from the app's Mono/Stereo buttons (needs the next app build).
