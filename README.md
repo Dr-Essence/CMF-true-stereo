@@ -49,6 +49,8 @@ HAL, so v1.0.1 removes the module's own swap (which undid it) and the v1.0.0 mix
 changed nothing). VLC and YouTube may play reversed with the earpiece on your right (see Pending).
 
 **Verified on the phone**
+- v1.0.1: the CMF L/R Test app's four buttons (MUSIC, MOVIE, GAME, SPEECH) and InShot follow
+  the rotation; VLC does not (it plays the same side whichever way the phone is turned).
 - v0.9.9 orientation swap by Dirac's tuning: the left-only file in USB Audio Player Pro
   (Android driver; Dirac MUSIC) and VLC (Dirac MOVIE), earpiece on either side: both right.
 - v0.9.9 Action button: switching Mono and Stereo from Magisk works; the audio service kept
@@ -88,9 +90,7 @@ changed nothing). VLC and YouTube may play reversed with the earpiece on your ri
 - Hi-res playback (USB Audio Player Pro, Direct 192 kHz) still works in stereo.
 
 **Not tested on a phone yet**
-- **v1.0.1** on the phone: UAPP, the CMF L/R Test app's four buttons and a game in both
-  orientations (expected right: Android swaps them), and VLC and YouTube (may be reversed with
-  the earpiece on your right). Tested here: every earlier stereo HAL (v0.9.5, v0.9.9, v1.0.0)
+- **v1.0.1** on the phone: UAPP and a game in both orientations, and YouTube (Flow). Tested here: every earlier stereo HAL (v0.9.5, v0.9.9, v1.0.0)
   and the stock one patch to the exact v0.9.0-v0.9.4 file on the real files, the undo gives
   stock back, and the test suite (147 checks).
 - v0.9.8 Action button: Magisk's **Action** on the module's card switches Mono <-> Stereo
