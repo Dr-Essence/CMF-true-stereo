@@ -337,6 +337,38 @@ hal_restart() {
 
 # live_switch mono|stereo -> 0 when the running system now uses that mode;
 # prints the reason otherwise (and leaves the system as it was).
+# After a failed switch: back to stock, proven, before the HAL restarts.
+# Without our mounts the vendor path is not always stock: Magisk 31 builds
+# /vendor/lib64/hw as a tmpfs skeleton whose replaced files are EMPTY
+# placeholders under the module's bind mounts (measured). The checked stock
+# copies go over whatever does not read back as stock. The HAL is restarted
+# only when all three files are proven stock; otherwise it is left running
+# (it already has its files loaded) and a reboot puts everything back.
+# Restarting it on empty files had it and audioserver crash-looping.
+_stock_ok() {
+  for _n in $HAL_NAMES; do
+    [ "$(_sha "$(_view "$HAL_DIR/$_n")")" = "$HAL_STOCK" ] || return 1
+  done
+  [ "$(_sha "$(_view "$AUR")")" = "$AUR_STOCK" ]
+}
+_live_fallback() {
+  live_unmount
+  for _n in $HAL_NAMES aurisys_config_rv.xml; do
+    case $_n in
+      aurisys_config_rv.xml) _dst=$AUR; _x=$AUR_STOCK ;;
+      *) _dst=$HAL_DIR/$_n; _x=$HAL_STOCK ;;
+    esac
+    [ "$(_sha "$(_view "$_dst")")" = "$_x" ] && continue
+    [ "$(_sha "$STOCKDIR/$_n")" = "$_x" ] && _global mount -o bind "$STOCKDIR/$_n" "$_dst"
+  done
+  if _stock_ok; then
+    hal_restart
+    log warn "$1 - back on the stock files"
+  else
+    log warn "$1 - the stock files could not be put back; the audio HAL was left running: reboot"
+  fi
+}
+
 live_switch() {
   case $1 in
     stereo) _hs=$OV_HAL;   _as=$OV_ETC/aurisys_config_rv.xml;  _hx=$HAL_STEREO; _ax=$AUR_STEREO ;;
@@ -358,6 +390,8 @@ live_switch() {
     [ "$(_sha "$_as")" = "$_ax" ] || { echo "no verified $1 copy of aurisys_config_rv.xml"; return 1; }
   fi
 
+  case $_hs in /*) ;; *) echo "internal: $_hs is not an absolute path"; return 1 ;; esac
+
   # Down to the vendor files themselves, then mount what is still needed.
   live_unmount || { echo "a mount over the audio files is not ours - not touching it"; return 1; }
   _fail=
@@ -373,19 +407,13 @@ live_switch() {
     _global mount -o bind "$_src" "$_dst" || { _fail="cannot mount over $_dst"; break; }
     [ "$(_sha "$(_view "$_dst")")" = "$_x" ] || { _fail="$_dst does not read back as the $1 file"; break; }
   done
-  # Any failure ends on the vendor files themselves (stock) and a HAL
-  # restarted on them: a known-good state, whatever ran before.
   if [ -n "$_fail" ]; then
-    live_unmount
-    hal_restart
-    log warn "live $1: $_fail - back on the stock files"
+    _live_fallback "live $1: $_fail"
     echo "$_fail"
     return 1
   fi
   if ! hal_restart; then
-    live_unmount
-    hal_restart
-    log warn "live $1: the audio HAL did not come back - back on the stock files"
+    _live_fallback "live $1: the audio HAL did not come back"
     echo "the audio HAL did not come back on the $1 files"
     return 1
   fi

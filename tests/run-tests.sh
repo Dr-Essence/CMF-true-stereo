@@ -616,6 +616,18 @@ STUB
   check "skeleton: mono live from the stock copy" "$_rc $(stereo_active && echo stereo || echo mono) $(cat "$HAL_DIR/audio.primary.mt6878.so")" "0 mono STOCK-HAL"
   live_switch stereo >/dev/null; _rc=$?
   check "skeleton: and back to stereo" "$_rc $(cat "$HAL_DIR/audio.primary.mediatek.so")" "0 STEREO-HAL"
+  # A failed switch on the skeleton must not leave the empty placeholders
+  # (v0.9.8 on the phone: HAL and audioserver crash-looped on them).
+  live_switch mono >/dev/null
+  echo bad > "$L/hal"
+  live_switch stereo >/dev/null
+  check "skeleton: failed stereo ends on the stock copies, not empty files" "$(cat "$HAL_DIR/audio.primary.mt6878.so" "$HAL_DIR/audio.primary.mediatek.so" | tr '\n' ' ')" "STOCK-HAL STOCK-HAL "
+  echo good > "$L/hal"
+  # Without stock copies nothing can be proven stock: the HAL is left alone.
+  live_unmount; _r0=$(cat "$L/restarts"); mv "$STOCKDIR" "$STOCKDIR.away"
+  _live_fallback "test"
+  check "skeleton: no stock copy, HAL not restarted onto empty files" "$(cat "$L/restarts")" "$_r0"
+  mv "$STOCKDIR.away" "$STOCKDIR"
   live_unmount; umount "$HAL_DIR"
 
   live_unmount
@@ -626,6 +638,13 @@ STUB
 else
   echo "  skip - bind mounts need root"
 fi
+
+echo "paths"
+check "a relative MODDIR is made absolute" "$(cd "$ROOT" && MODDIR=. DATADIR="$DATADIR" sh -c '. ./scripts/common.sh; echo "$MODDIR|$OV_HAL"')" "$ROOT|$ROOT/system/vendor/lib64/hw"
+mkdir -p "$TMP/am/scripts"; printf 'echo "$MODDIR"\n' > "$TMP/am/scripts/stereoctl"
+printf ': > /dev/null\n' > "$TMP/am/scripts/common.sh"
+sed 's#^\. "\$MODDIR/scripts/common.sh"#. "$MODDIR/scripts/common.sh"; stereo_staged() { return 1; }#' "$ROOT/action.sh" > "$TMP/am/action.sh"
+check "action.sh started as ./action.sh passes an absolute folder" "$(cd "$TMP/am" && sh ./action.sh | tail -n 1)" "$TMP/am"
 
 echo "magisk description"
 MODPROP=$TMP/module.prop; cp "$ROOT/module.prop" "$MODPROP"

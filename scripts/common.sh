@@ -6,6 +6,14 @@ MODID=cmf_stereo
 MODDIR=${MODDIR:-/data/adb/modules/$MODID}
 # Overridable so the scripts can be exercised off-device.
 DATADIR=${DATADIR:-/data/adb/cmf-stereo}
+# Always absolute. Magisk runs action.sh as ./action.sh from the module's
+# folder, so ${0%/*} is "."; a relative path is wrong as soon as a command
+# runs elsewhere. nsenter puts the live-switch mount at init's root, where
+# ./system/vendor/... is /system/vendor -> /vendor: the stereo HAL was then
+# "mounted" from Magisk's empty placeholder of the very file it was meant to
+# replace (measured on the phone, v0.9.8).
+case $MODDIR in /*) ;; *) MODDIR=$(cd "$MODDIR" 2>/dev/null && pwd) || MODDIR=/data/adb/modules/$MODID ;; esac
+case $DATADIR in /*) ;; *) DATADIR=$(cd "$DATADIR" 2>/dev/null && pwd) || DATADIR=/data/adb/cmf-stereo ;; esac
 
 CONF=$DATADIR/stereo.conf
 ACTIONS=$DATADIR/actions.conf
