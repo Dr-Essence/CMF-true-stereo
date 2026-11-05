@@ -9,7 +9,7 @@ OUT=${1:-cmf-stereo-$VER.zip}
 rm -f "$OUT"
 zip -qr9 "$OUT" \
   module.prop customize.sh service.sh post-fs-data.sh uninstall.sh action.sh \
-  META-INF scripts config system bin \
+  META-INF scripts config system bin protect/libcmfstereo.so \
   README.md \
   -x '*.zip' '*/.*'
 

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Assembles the orientation-swap patch, runs it in an ARM64 emulator against
+# Assembles the HAL patch (library loader, fallback swap), runs it in an ARM64 emulator against
 # test buffers (harness.c), and checks that the bytes channels.sh writes into
 # the HAL are exactly what patch.S assembles to at 0x27b820.
 # Needs clang, ld.lld, llvm-objcopy and qemu-aarch64; skipped without them.
@@ -24,7 +24,7 @@ if cmp -s "$T/patch.bin" "$T/module.bin"; then
 else
   echo "  FAIL - channels.sh bytes differ from patch.S"; exit 1
 fi
-[ "$(wc -c < "$T/patch.bin")" -le 512 ] || { echo "  FAIL - patch overruns the 512-byte function"; exit 1; }
+[ "$(wc -c < "$T/patch.bin")" -le 432 ] || { echo "  FAIL - patch overruns the 432 stock bytes channels.sh restores"; exit 1; }
 # The branch at 0x2587c0 must land on rotcave as assembled.
 _rot=$(llvm-nm "$T/patch.elf" | awk '$3 == "rotcave" { print $1 }')
 _ins=$(( 0x14000000 | (((0x$_rot - 0x2587c0) / 4) & 0x3ffffff) ))

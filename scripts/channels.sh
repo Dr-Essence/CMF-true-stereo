@@ -42,7 +42,9 @@ HAL_STOCK=28db2e24e9d4c4f88a67a7631ab581fa064bb03a47a87314b7599a2cb757a324
 # right at rotation 270, on the left at 90, in all four Dirac tunings and
 # from USB Audio Player Pro), except for a track whose session has its own
 # effect chain (VLC, the test app's MOVIE + EFFECT: the beep stayed left).
-HAL_STEREO=ecd4aa34694fd3e09d964c5271ae702c086cec8bcefa89ace93461ba398ca397
+HAL_STEREO=a6362995ca0a3987e58e149c070573b4fd8ae4aecb66c196f9fdbfbf97a803ea
+# v1.0.2-v1.0.3 stereo (swap in the patch, no protection library): patched again in place.
+HAL_STEREO_V5=ecd4aa34694fd3e09d964c5271ae702c086cec8bcefa89ace93461ba398ca397
 # v0.9.0-v0.9.4 and v1.0.1 stereo (no swap of its own): patched again in place.
 HAL_STEREO_V1=2615f6e28e40a0520f6122e03513f374294e011fa3c654801e898f5ea62a5edf
 # v1.0.0 stereo (swap on every output): patched again in place.
@@ -64,6 +66,14 @@ AUR_MARK='cmf_stereo: stereo'
 OV_HAL=$MODDIR/system/vendor/lib64/hw
 OV_ETC=$MODDIR/system/vendor/etc
 
+# The protection library the stereo HAL loads (protect/cmfstereo.c, built by
+# protect/build.sh): the rotation swap, the speaker and bass limiters and the
+# earpiece limiter. Not a vendor file: it ships in the module and is staged
+# next to the stereo HAL, so a mono boot stays all stock.
+LIB=libcmfstereo.so
+LIB_HASH=d476a1e3d3d57001c235a2589eca232c6b63b2943a3fa773083fd9f054167796
+LIB_SRC=$MODDIR/protect/$LIB
+
 # Every file stereo replaces. _spec NAME sets its path (_dst), its stock and
 # stereo hashes (_x, _y) and where the module keeps its stereo copy (_ovd).
 STEREO_FILES="$HAL_NAMES aurisys_config_rv.xml"
@@ -77,11 +87,10 @@ _spec() {
 _sha() { sha256sum "$1" 2>/dev/null | cut -d' ' -f1; }
 
 # Patch a stock HAL copy in place (four spots):
-#   0x27b820 doStereoToMonoConversionIfNeed: replaced by the orientation swap
-#            and the rotation store (hal-swap/patch.S, 284 bytes, assembled and
-#            tested in an ARM64 emulator: hal-swap/run.sh). No fold to mono;
-#            left and right are swapped only for the speaker streams the
-#            daemon flags in vendor.audiohal.cmf_swap, at rotation 270
+#   0x27b820 doStereoToMonoConversionIfNeed: no fold to mono. It loads the
+#            protection library (below) once and calls it for every buffer;
+#            without it, the rotation swap alone (hal-swap/patch.S, 432 bytes,
+#            assembled and tested in an ARM64 emulator: hal-swap/run.sh)
 #   0x2587c0 setParameters, "rotation" key: b to the rotation store, which
 #            keeps the value in vendor.audiohal.cmf_rotation (the stock HAL
 #            only drops it) and returns
@@ -92,8 +101,8 @@ _sha() { sha256sum "$1" 2>/dev/null | cut -d' ' -f1; }
 # same file, and _unpatch_hal gives back the stock file from any of them.
 HAL_STOCK_REGION='\377\003\002\321\375\173\004\251\370\137\005\251\366\127\006\251\364\117\007\251\375\003\001\221\127\320\073\325\365\003\000\252\350\026\100\371\363\003\002\252\364\003\001\252\250\203\037\370\000\014\100\371\243\225\003\224\366\003\000\052\037\004\000\161\241\002\000\124\250\022\100\371\340\203\000\221\001\141\007\221\264\212\003\224\350\047\102\251\037\001\011\353\000\001\000\124\012\001\100\271\137\011\000\161\240\000\000\124\010\021\000\221\037\001\011\353\141\377\377\124\007\000\000\024\037\001\011\353\240\000\000\124\070\000\200\122\340\023\100\371\340\002\000\265\037\000\000\024\250\022\100\371\001\141\007\221\340\043\000\221\240\212\003\224\340\243\100\251\010\001\000\353\340\000\000\124\037\021\000\361\250\000\000\124\010\000\100\271\037\005\000\161\370\027\237\032\003\000\000\024\200\001\000\264\370\003\037\052\340\013\000\371\077\212\003\224\337\006\000\161\201\001\000\124\340\023\100\371\100\001\000\264\340\027\000\371\071\212\003\224\030\001\000\067\051\000\000\024\337\006\000\161\341\004\000\124\370\003\037\052\340\023\100\371\000\377\377\265\170\004\000\064\250\022\100\371\010\001\100\271\037\015\000\161\100\002\000\124\037\005\000\161\241\003\000\124\223\003\000\264\037\040\003\325\210\002\100\171\163\022\000\361\211\006\100\171\010\075\110\013\051\075\111\013\010\075\000\023\051\075\001\023\050\005\210\013\210\002\000\171\210\006\000\171\224\022\000\221\241\376\377\124\016\000\000\024\263\001\000\264\037\040\003\325\037\040\003\325\210\046\100\051\037\001\000\161\010\245\210\032\077\001\000\161\051\245\211\032\163\042\000\361\051\175\001\023\050\005\210\013\210\042\201\050\341\376\377\124\350\026\100\371\251\203\137\370\037\001\011\353\241\002\000\124\340\003\037\052\364\117\107\251'
 HAL_STOCK_B='\041\011\000\260'
-HAL_SWAP_BODY='\375\173\275\251\375\003\000\221\363\123\001\251\365\023\000\371\363\003\000\252\364\003\001\252\365\003\002\252\150\022\100\371\350\004\000\264\011\251\135\251\113\001\011\313\177\021\000\361\141\004\000\124\053\001\100\271\177\011\000\161\001\004\000\124\040\005\000\020\341\003\037\052\342\213\003\224\037\070\004\161\141\003\000\124\140\005\000\060\341\003\037\052\335\213\003\224\150\022\100\371\011\015\100\271\037\000\011\152\200\002\000\124\010\001\100\271\037\015\000\161\140\001\000\124\037\005\000\161\341\001\000\124\251\376\102\323\251\001\000\264\212\002\100\271\112\101\212\023\212\106\000\270\051\005\000\361\201\377\377\124\007\000\000\024\251\376\103\323\251\000\000\264\212\056\100\051\213\052\201\050\051\005\000\361\241\377\377\124\340\003\037\052\365\023\100\371\363\123\101\251\375\173\303\250\300\003\137\326\341\343\101\371\200\000\000\020\362\235\003\224\001\010\000\320\261\163\377\027\166\145\156\144\157\162\056\141\165\144\151\157\150\141\154\056\143\155\146\137\162\157\164\141\164\151\157\156\000\166\145\156\144\157\162\056\141\165\144\151\157\150\141\154\056\143\155\146\137\163\167\141\160\000\000\000'
-HAL_SWAP_B='\114\214\000\024'
+HAL_SWAP_BODY='\375\173\275\251\375\003\000\221\363\123\001\251\365\023\000\371\363\003\000\252\364\003\001\252\365\003\002\252\111\010\000\260\051\301\077\221\052\001\100\371\312\001\000\265\053\011\100\271\253\002\000\065\140\012\000\120\101\000\200\122\071\215\003\224\240\001\000\264\341\012\000\160\076\215\003\224\100\001\000\264\111\010\000\260\051\301\077\221\040\001\000\371\352\003\000\252\340\003\023\252\341\003\024\252\342\003\025\252\100\001\077\326\055\000\000\024\111\010\000\260\051\301\077\221\053\000\200\122\053\011\000\271\150\022\100\371\350\004\000\264\011\251\135\251\113\001\011\313\177\021\000\361\141\004\000\124\053\001\100\271\177\011\000\161\001\004\000\124\040\005\000\020\341\003\037\052\310\213\003\224\037\070\004\161\141\003\000\124\140\005\000\060\341\003\037\052\303\213\003\224\150\022\100\371\011\015\100\271\037\000\011\152\200\002\000\124\010\001\100\271\037\015\000\161\140\001\000\124\037\005\000\161\341\001\000\124\251\376\102\323\251\001\000\264\212\002\100\271\112\101\212\023\212\106\000\270\051\005\000\361\201\377\377\124\007\000\000\024\251\376\103\323\251\000\000\264\212\056\100\051\213\052\201\050\051\005\000\361\241\377\377\124\340\003\037\052\365\023\100\371\363\123\101\251\375\173\303\250\300\003\137\326\341\343\101\371\200\000\000\020\330\235\003\224\001\010\000\320\227\163\377\027\166\145\156\144\157\162\056\141\165\144\151\157\150\141\154\056\143\155\146\137\162\157\164\141\164\151\157\156\000\166\145\156\144\157\162\056\141\165\144\151\157\150\141\154\056\143\155\146\137\163\167\141\160\000\057\166\145\156\144\157\162\057\154\151\142\066\064\057\150\167\057\154\151\142\143\155\146\163\164\145\162\145\157\056\163\157\000\143\155\146\137\160\162\157\143\145\163\163\000\000'
+HAL_SWAP_B='\146\214\000\024'
 _patch_hal() {
   printf "$HAL_STOCK_REGION" | dd of="$1" bs=1 seek=2603040 conv=notrunc 2>/dev/null &&
   printf "$HAL_SWAP_BODY" | dd of="$1" bs=1 seek=2603040 conv=notrunc 2>/dev/null &&
@@ -210,7 +219,7 @@ build_known() {
     _f=$(_view "$HAL_DIR/$_n")
     [ -f "$_f" ] || return 2
     case $(_sha "$_f") in
-      "$HAL_STOCK"|"$HAL_STEREO"|"$HAL_STEREO_V4"|"$HAL_STEREO_V3"|"$HAL_STEREO_V2"|"$HAL_STEREO_V1") ;;
+      "$HAL_STOCK"|"$HAL_STEREO"|"$HAL_STEREO_V5"|"$HAL_STEREO_V4"|"$HAL_STEREO_V3"|"$HAL_STEREO_V2"|"$HAL_STEREO_V1") ;;
       *) return 1 ;;
     esac
   done
@@ -251,7 +260,7 @@ stage_stereo() {
     case $_h in
       "$HAL_STOCK")  _patch_hal "$_tmp/$_n" || { _fail="patching $_n failed"; break; } ;;
       "$HAL_STEREO") ;;   # already ours (overlay mounted): keep as is
-      "$HAL_STEREO_V1"|"$HAL_STEREO_V2"|"$HAL_STEREO_V3"|"$HAL_STEREO_V4")   # v0.9.0-v1.0.1: the patch rewrites every spot they changed
+      "$HAL_STEREO_V1"|"$HAL_STEREO_V2"|"$HAL_STEREO_V3"|"$HAL_STEREO_V4"|"$HAL_STEREO_V5")   # v0.9.0-v1.0.3: the patch rewrites every spot they changed
         _patch_hal "$_tmp/$_n" || { _fail="converting the earlier stereo $_n failed"; break; } ;;
       *) _fail="$_src is not the analysed build ($_h) - refusing to patch an unknown binary"; break ;;
     esac
@@ -282,6 +291,14 @@ stage_stereo() {
     chmod 0644 "$OV_HAL/$_n"
     chcon "$(ls -Z "$HAL_DIR/$_n" | awk '{print $1}')" "$OV_HAL/$_n" 2>/dev/null
   done
+  # The protection library. Without it stereo still plays (the HAL patch
+  # falls back to the swap alone) and the speaker keeps its fixed attenuation.
+  if [ "$(_sha "$LIB_SRC")" = "$LIB_HASH" ]; then
+    cp -f "$LIB_SRC" "$OV_HAL/$LIB" && chmod 0644 "$OV_HAL/$LIB"
+    chcon "$(ls -Z "$HAL_DIR/audio.primary.mt6878.so" | awk '{print $1}')" "$OV_HAL/$LIB" 2>/dev/null
+  else
+    log warn "stereo: protection library missing or not the tested build - staged without it"
+  fi
   mv -f "$_tmp/aurisys_config_rv.xml" "$OV_ETC/aurisys_config_rv.xml"
   chmod 0644 "$OV_ETC/aurisys_config_rv.xml"
   chcon "$(ls -Z "$AUR" | awk '{print $1}')" "$OV_ETC/aurisys_config_rv.xml" 2>/dev/null
@@ -291,7 +308,7 @@ stage_stereo() {
 }
 
 unstage_stereo() {
-  for _n in $HAL_NAMES; do rm -f "$OV_HAL/$_n"; done
+  for _n in $HAL_NAMES $LIB; do rm -f "$OV_HAL/$_n"; done
   rm -f "$OV_ETC/aurisys_config_rv.xml"
   # Leave system/bin in place: it carries the stereoctl shim.
   rmdir "$OV_HAL" "$MODDIR/system/vendor/lib64" "$OV_ETC" "$MODDIR/system/vendor" 2>/dev/null
@@ -491,6 +508,87 @@ live_switch() {
 }
 
 ##############################################################################
+# protection (the library the stereo HAL loads)
+#
+# Measured with CMF L/R Test DRIVER STUDY: Awinic's protection in mono keeps the
+# speaker's peaks at about -5 dB below the amp's full output, cuts 100 Hz by
+# 16 dB at any level, and boosts 150 Hz-3 kHz by about 3.5 dB; the earpiece
+# clips in the top 1.5 dB of full scale. In stereo the library holds:
+#   - speaker peaks at most -5 dB below the amp's full output (the speaker boost
+#     lowers the amp's fixed attenuation by up to 6 dB, only while the library
+#     runs, and the limiter's ceiling follows so the peaks never exceed that);
+#   - the speaker's band below 100 Hz at a ceiling (light -8, medium -14,
+#     strong -20 dB below the amp's full output), only when it is louder:
+#     quiet bass is untouched, unlike Awinic's fixed cut;
+#   - the earpiece at -2.5 dBFS when its limiter is on.
+# Ceilings reach the library as properties in hundredths of a dB of the
+# samples' full scale; 0 switches a stage off.
+##############################################################################
+
+# The library runs: it marks itself on its first speaker buffer, and the file
+# the HAL loads is the tested build.
+prot_running() {
+  [ "$(getprop vendor.audiohal.cmf_prot 2>/dev/null)" = 1 ] &&
+    [ "$(_sha "$(_view "$HAL_DIR/$LIB")")" = "$LIB_HASH" ]
+}
+
+_num() { case $1 in ''|*[!0-9]*) echo "$2" ;; *) echo "$1" ;; esac; }
+
+# The amp's attenuation in dB: the speaker level's (STEREO_ATTEN_DB) less the
+# boost, the boost only while the protection runs.
+prot_atten_db() {
+  _a=$(_num "${STEREO_ATTEN_DB:-6}" 6); [ "$_a" -gt 30 ] && _a=30
+  _b=$(_num "${SPEAKER_BOOST:-0}" 0); [ "$_b" -gt 6 ] && _b=6
+  prot_running || _b=0
+  _e=$((_a - _b)); [ "$_e" -lt 0 ] && _e=0
+  echo "$_e"
+}
+
+# The three ceilings, in hundredths of a dB of full scale (0 = off).
+prot_ceilings() {
+  _e=$(prot_atten_db)
+  _s=$(( (_e - 5) * 100 )); [ "$_s" -ge 0 ] && _s=0
+  case ${BASS_PROTECT:-medium} in
+    light) _bq=-8 ;; strong) _bq=-20 ;; off) _bq= ;; *) _bq=-14 ;;
+  esac
+  if [ -n "$_bq" ]; then _bb=$(( (_bq + _e) * 100 )); [ "$_bb" -ge 0 ] && _bb=0; else _bb=0; fi
+  case ${EARPIECE_LIMIT:-on} in off) _ec=0 ;; *) _ec=-250 ;; esac
+  echo "$_s $_bb $_ec"
+}
+
+_setprop() {
+  [ "$(getprop "$1" 2>/dev/null)" = "$2" ] && return 0
+  if command -v resetprop >/dev/null 2>&1; then resetprop -n "$1" "$2"; else setprop "$1" "$2"; fi
+}
+
+# Crash-loop guard. The stereo HAL runs the module's own code (the patch and
+# the protection library); if the audio HAL kept dying in stereo, Android
+# would just restart it, the phone would still boot, and the boot watchdog
+# would never see it. So: the HAL's pid is watched while stereo runs, and
+# three new pids within 60 s (a mode switch restarts it once) put the phone
+# back on the stock files, mono, at once. Call once per daemon cycle.
+HALWATCH=$STATEDIR/hal_pids
+hal_crash_loop() {
+  _p=$(getprop "init.svc_debug_pid.$HAL_SVC" 2>/dev/null)
+  [ -n "$_p" ] || return 1
+  _t=$(date +%s)
+  _last=$(tail -n 1 "$HALWATCH" 2>/dev/null | cut -d' ' -f2)
+  [ "$_p" = "$_last" ] && return 1
+  echo "$_t $_p" >> "$HALWATCH"
+  # Keep the last minute only.
+  awk -v t="$_t" '$1 >= t - 60' "$HALWATCH" > "$HALWATCH.n" 2>/dev/null && mv -f "$HALWATCH.n" "$HALWATCH"
+  [ "$(grep -c . "$HALWATCH")" -ge 4 ]   # the first pid seen plus three restarts
+}
+
+# Hand the library its ceilings (only what changed is written).
+prot_apply() {
+  set -- $(prot_ceilings)
+  _setprop vendor.audiohal.cmf_spk_ceil "$1"
+  _setprop vendor.audiohal.cmf_bass_ceil "$2"
+  _setprop vendor.audiohal.cmf_ear_ceil "$3"
+}
+
+##############################################################################
 # speaker amp (Awinic aw882xx)
 #
 # Register 0x06 (I2SCTRL) bits 11:10 select the I2S slot the amp plays:
@@ -534,21 +632,22 @@ amp_set_chsel() {
 # the aw882xx driver (VOL_STEP_DB = 6 * 8, MUTE_VOL = 90 * 8).
 AMP_VOL_CTL=aw_dev_0_volume
 amp_atten_steps() {
-  _db=${STEREO_ATTEN_DB:-6}
-  case $_db in ''|*[!0-9]*) _db=6 ;; esac
-  [ "$_db" -gt 30 ] && _db=30
-  echo $((_db * 8))
+  echo $(( $(prot_atten_db) * 8 ))
 }
 
-# Hold at least the configured attenuation while stereo is active. A larger
-# attenuation already set (by the user, or the driver's own monitor) is kept.
+# Hold the wanted attenuation while stereo is active. A larger attenuation set
+# by someone else (the user, or the driver's own monitor) is kept; one this
+# module set itself is lowered when the speaker boost allows it.
 amp_hold_atten() {
   _want=$(amp_atten_steps)
   _cur=$(ctl_get "$AMP_VOL_CTL" 2>/dev/null)
   case $_cur in ''|*[!0-9]*) return 1 ;; esac
   _save_original ctl "$AMP_VOL_CTL" "$_cur"
-  [ "$_cur" -ge "$_want" ] && return 0
-  ctl_set "$AMP_VOL_CTL" "$_want" && log info "amp attenuation: $_cur -> $_want (${STEREO_ATTEN_DB:-6} dB, stereo)"
+  _ours=$(cat "$STATEDIR/amp_ours" 2>/dev/null)
+  [ "$_cur" -eq "$_want" ] && return 0
+  [ "$_cur" -gt "$_want" ] && [ "$_cur" != "$_ours" ] && return 0
+  ctl_set "$AMP_VOL_CTL" "$_want" && echo "$_want" > "$STATEDIR/amp_ours" &&
+    log info "amp attenuation: $_cur -> $_want ($(prot_atten_db) dB, stereo)"
 }
 
 # Back to what the amp had before stereo, once.
@@ -556,5 +655,5 @@ amp_release_atten() {
   _orig=$(_original ctl "$AMP_VOL_CTL")
   [ -n "$_orig" ] || return 0
   ctl_set "$AMP_VOL_CTL" "$_orig" && log info "amp attenuation restored to $_orig"
-  rm -f "$STATEDIR/$(_state_key ctl "$AMP_VOL_CTL")"
+  rm -f "$STATEDIR/$(_state_key ctl "$AMP_VOL_CTL")" "$STATEDIR/amp_ours"
 }

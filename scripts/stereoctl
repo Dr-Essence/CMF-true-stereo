@@ -41,6 +41,15 @@ stereoctl - CMF Phone 1 stereo speaker control
                                protection is replaced by a fixed amp
                                attenuation (STEREO_ATTEN_DB, default 6 dB)
 
+  protect             show the stereo protection settings and whether it runs
+  protect boost N     speaker boost, 0-6 dB less amp attenuation (only while
+                      the protection runs; peaks stay at Awinic's -5 dB)
+  protect bass off|light|medium|strong
+                      hold the speaker's deep bass (below 100 Hz) only when it
+                      gets loud: -8 / -14 / -20 dB below the amp's full output
+  protect earpiece on|off
+                      hold the earpiece below -2.5 dBFS (it clips above)
+
   xml-patch           overlay a Speaker-port-stereo audio policy (reboot)
   xml-revert          remove that overlay (reboot)
 
@@ -356,7 +365,10 @@ cmd_channels() {
         echo
         echo "  earpiece = left channel, speaker = right channel."
         echo "  Awinic's speaker protection is off for media in this mode; the"
-        echo "  amp is held ${STEREO_ATTEN_DB:-6} dB down instead (STEREO_ATTEN_DB)."
+        echo "  amp is held ${STEREO_ATTEN_DB:-6} dB down instead (STEREO_ATTEN_DB), and the"
+        echo "  module's own protection holds the deep bass and the earpiece"
+        echo "  ('stereoctl protect'; after a live switch from a mono boot it starts"
+        echo "  with the next reboot)."
         echo "  Back off at the first sign of distortion, and use"
         echo "  'stereoctl channels mono' for loud listening."
         echo
@@ -387,6 +399,39 @@ cmd_channels() {
       ;;
     *) echo "usage: stereoctl channels [mono|stereo]"; return 1 ;;
   esac
+}
+
+# Writes KEY=VALUE into stereo.conf (added when missing).
+_conf_set() {
+  if grep -q "^$1=" "$CONF" 2>/dev/null; then sed -i "s/^$1=.*/$1=$2/" "$CONF"
+  else echo "$1=$2" >> "$CONF"; fi
+}
+
+cmd_protect() {
+  case ${1:-} in
+    '') ;;
+    boost)
+      case ${2:-} in [0-6]) _conf_set SPEAKER_BOOST "$2"; SPEAKER_BOOST=$2 ;;
+        *) echo "usage: stereoctl protect boost 0-6"; return 1 ;; esac ;;
+    bass)
+      case ${2:-} in off|light|medium|strong) _conf_set BASS_PROTECT "$2"; BASS_PROTECT=$2 ;;
+        *) echo "usage: stereoctl protect bass off|light|medium|strong"; return 1 ;; esac ;;
+    earpiece)
+      case ${2:-} in on|off) _conf_set EARPIECE_LIMIT "$2"; EARPIECE_LIMIT=$2 ;;
+        *) echo "usage: stereoctl protect earpiece on|off"; return 1 ;; esac ;;
+    *) echo "usage: stereoctl protect [boost N | bass LEVEL | earpiece on|off]"; return 1 ;;
+  esac
+  # Applied by the daemon within one cycle; also now, if stereo runs.
+  stereo_active && prot_apply
+  set -- $(prot_ceilings)
+  if prot_running; then _run="running"
+  elif stereo_active; then _run="not running yet (it starts with the first sound on the speaker; after a live switch from a mono boot, after a reboot)"
+  else _run="off (mono)"; fi
+  echo "protection:  $_run"
+  echo "boost:       ${SPEAKER_BOOST:-0} dB  (amp attenuation now $(prot_atten_db) dB)"
+  echo "bass:        ${BASS_PROTECT:-medium}"
+  echo "earpiece:    ${EARPIECE_LIMIT:-on}"
+  echo "ceilings:    speaker $1, bass $2, earpiece $3 (1/100 dB of full scale, 0 = off)"
 }
 
 cmd_restart() {
@@ -433,6 +478,7 @@ case ${1:-status} in
   dump)    cmd_dump ;;
   diff)    cmd_diff "$2" ;;
   channels) cmd_channels "$2"; _rc=$?; [ -n "${2:-}" ] && update_description; exit $_rc ;;
+  protect)  cmd_protect "$2" "$3" ;;
   xml-patch)  sh "$MODDIR/scripts/xml_patch.sh" patch ;;
   xml-revert) sh "$MODDIR/scripts/xml_patch.sh" revert ;;
   -h|--help|help) usage ;;

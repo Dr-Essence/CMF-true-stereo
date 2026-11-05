@@ -1,7 +1,7 @@
 id=cmf_stereo
 name=CMF Phone 1 Dual Speaker (mono / stereo)
-version=v1.0.3
-versionCode=1030
+version=v1.0.4
+versionCode=1040
 author=Dr.Essence
 description=Real left/right stereo on the CMF Phone 1 (A015): earpiece left, bottom speaker right, swapped when the phone is turned. Mono (stock, with Awinic speaker protection) or Stereo, switched at once from the app, stereoctl or the Action button. Patches only this phone's verified vendor files; back to mono after two failed boots.
 updateJson=https://raw.githubusercontent.com/Dr-Essence/CMF-true-stereo/main/update.json

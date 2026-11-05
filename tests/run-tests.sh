@@ -540,6 +540,7 @@ OV_HAL=$K/ov/hw; OV_ETC=$K/ov/etc
 cp "$K/stock.so" "$HAL_DIR/audio.primary.mt6878.so"; cp "$K/v2.so" "$HAL_DIR/audio.primary.mediatek.so"
 _OV4=$HAL_STEREO_V4; HAL_STEREO_V4=$(_sha "$K/v2.so"); rm -rf "$STOCKDIR"
 check "staged (one stock HAL, one earlier stereo HAL)" "$(stage_stereo >/dev/null && echo ok)" "ok"
+check "the protection library is staged with the stereo HAL" "$(_sha "$OV_HAL/$LIB")" "$LIB_HASH"
 check "staged HALs are the stereo build" "$(_sha "$OV_HAL/audio.primary.mt6878.so") $(_sha "$OV_HAL/audio.primary.mediatek.so")" "$HAL_STEREO $HAL_STEREO"
 check "staged DSP config" "$(_sha "$OV_ETC/aurisys_config_rv.xml")" "$AUR_STEREO"
 HAL_STEREO_V4=$_OV4
@@ -579,6 +580,103 @@ if [ -z "$_rp" ]; then
   check "property written from the dump" "$(cat "$TMP/prop")" "8"
   swap_outputs_update
   check "same value: not written again" "$(wc -l < "$TMP/writes" | tr -d ' ')" "1"
+else
+  ok "skip - resetprop present on this host"
+fi
+PATH=$_OP
+
+echo "protection settings"
+# getprop/setprop stand-ins that keep one file per property.
+P=$TMP/props; mkdir -p "$P" "$TMP/pb2"
+cat > "$TMP/pb2/getprop" <<SH
+#!/bin/sh
+cat "$P/\$1" 2>/dev/null
+SH
+cat > "$TMP/pb2/setprop" <<SH
+#!/bin/sh
+printf '%s' "\$2" > "$P/\$1"
+SH
+chmod +x "$TMP/pb2/"*
+_OP=$PATH; PATH=$TMP/pb2:$PATH
+if [ -z "$(command -v resetprop || true)" ]; then
+  _OHD=$HAL_DIR; HAL_DIR=$TMP/libhw; mkdir -p "$HAL_DIR"; _OLR=$LIVE_ROOT; LIVE_ROOT=
+  STEREO_ATTEN_DB=6; SPEAKER_BOOST=6; BASS_PROTECT=medium; EARPIECE_LIMIT=on
+  check "not running: no boost, speaker limiter off, bass -8, earpiece -2.5" "$(prot_atten_db) $(prot_ceilings)" "6 0 -800 -250"
+  printf 1 > "$P/vendor.audiohal.cmf_prot"
+  check "marked running but no library file: still no boost" "$(prot_atten_db)" "6"
+  cp "$ROOT/protect/libcmfstereo.so" "$HAL_DIR/$LIB"
+  check "running, boost 6: amp 0 dB, speaker peaks -5, bass -14" "$(prot_atten_db) $(prot_ceilings)" "0 -500 -1400 -250"
+  SPEAKER_BOOST=3
+  check "boost 3: amp 3 dB, speaker -2, bass -11" "$(prot_atten_db) $(prot_ceilings)" "3 -200 -1100 -250"
+  SPEAKER_BOOST=0
+  check "boost 0: exactly as before (amp 6 dB, speaker limiter off)" "$(prot_atten_db) $(prot_ceilings)" "6 0 -800 -250"
+  BASS_PROTECT=light; check "bass light at boost 0: -2" "$(prot_ceilings)" "0 -200 -250"
+  BASS_PROTECT=strong; check "bass strong at boost 0: -14" "$(prot_ceilings)" "0 -1400 -250"
+  BASS_PROTECT=off; EARPIECE_LIMIT=off; check "bass off, earpiece off" "$(prot_ceilings)" "0 0 0"
+  BASS_PROTECT=medium; EARPIECE_LIMIT=on; STEREO_ATTEN_DB=12; SPEAKER_BOOST=6
+  check "speaker level lower (12 dB) + boost 6: amp 6 dB, limiter off" "$(prot_atten_db) $(prot_ceilings)" "6 0 -800 -250"
+  STEREO_ATTEN_DB=6; SPEAKER_BOOST=9
+  check "boost above 6 is held at 6" "$(prot_atten_db)" "0"
+  SPEAKER_BOOST=6; prot_apply
+  check "ceilings handed to the library" "$(cat "$P/vendor.audiohal.cmf_spk_ceil") $(cat "$P/vendor.audiohal.cmf_bass_ceil") $(cat "$P/vendor.audiohal.cmf_ear_ceil")" "-500 -1400 -250"
+  # The amp: a stand-in volume control.
+  cat > "$TMP/pb2/tm" <<SH
+#!/bin/sh
+case "\$1" in --help|-h) printf 'commands:\n\tget NAME|ID : x\n\tset NAME|ID VALUE : x\n'; exit 0 ;;
+  get) cat "$TMP/vol"; exit 0 ;; set) printf '%s' "\$3" > "$TMP/vol"; exit 0 ;; esac
+exit 1
+SH
+  chmod +x "$TMP/pb2/tm"; TINYMIX="$TMP/pb2/tm"; unset TINYMIX_STYLE; MIXER_CARD=
+  rm -f "$STATEDIR/amp_ours"
+  printf 48 > "$TMP/vol"; echo 48 > "$STATEDIR/amp_ours"; amp_hold_atten
+  check "boost 6: the module's own 6 dB is lowered to 0" "$(cat "$TMP/vol")" "0"
+  SPEAKER_BOOST=0; amp_hold_atten
+  check "boost back to 0: 6 dB again" "$(cat "$TMP/vol")" "48"
+  printf 80 > "$TMP/vol"; SPEAKER_BOOST=6; amp_hold_atten
+  check "a larger attenuation someone else set is kept" "$(cat "$TMP/vol")" "80"
+  rm -f "$P/vendor.audiohal.cmf_prot"; printf 0 > "$TMP/vol"; echo 0 > "$STATEDIR/amp_ours"; amp_hold_atten
+  check "protection stops: back to 6 dB" "$(cat "$TMP/vol")" "48"
+  unset TINYMIX TINYMIX_STYLE; rm -f "$STATEDIR/amp_ours"
+  STEREO_ATTEN_DB=6; SPEAKER_BOOST=0; BASS_PROTECT=medium; EARPIECE_LIMIT=on
+  HAL_DIR=$_OHD; LIVE_ROOT=$_OLR
+  # stereoctl protect writes the settings.
+  cp "$ROOT/config/stereo.conf" "$CONF"
+  _o=$(MODDIR=$ROOT DATADIR=$DATADIR sh "$ROOT/scripts/stereoctl" protect boost 4 2>&1)
+  check "stereoctl protect boost 4 -> stereo.conf" "$(grep -c '^SPEAKER_BOOST=4$' "$CONF")" "1"
+  MODDIR=$ROOT DATADIR=$DATADIR sh "$ROOT/scripts/stereoctl" protect bass strong >/dev/null 2>&1
+  check "stereoctl protect bass strong -> stereo.conf" "$(grep -c '^BASS_PROTECT=strong$' "$CONF")" "1"
+  check "a wrong value is refused" "$(MODDIR=$ROOT DATADIR=$DATADIR sh "$ROOT/scripts/stereoctl" protect boost 9 | head -n 1)" "usage: stereoctl protect boost 0-6"
+  check "the status names the protection" "$(echo "$_o" | grep -c '^protection: ')" "1"
+else
+  ok "skip - resetprop present on this host"
+fi
+PATH=$_OP
+check "the default config has the three settings" \
+  "$(grep -cE '^(SPEAKER_BOOST=0|BASS_PROTECT=medium|EARPIECE_LIMIT=on)$' "$ROOT/config/stereo.conf")" "3"
+check "the library is packaged" "$(grep -c 'protect/libcmfstereo.so' "$ROOT/build.sh")" "1"
+check "the library shipped is the tested build" "$(sha256sum "$ROOT/protect/libcmfstereo.so" | cut -d' ' -f1)" "$LIB_HASH"
+if command -v cc >/dev/null 2>&1; then
+  if cc -O2 -I"$ROOT/protect/test" -o "$TMP/ptest" "$ROOT/protect/cmfstereo.c" "$ROOT/protect/test/test.c" -lm -lpthread 2>/dev/null; then
+    _pt=$("$TMP/ptest"); check "protection library: $(echo "$_pt" | grep -c '^  ok') host tests pass" "$(echo "$_pt" | tail -n 1)" "all passed"
+  else ok "skip - the library's host tests did not compile here"; fi
+else ok "skip - no C compiler for the library's host tests"; fi
+
+echo "audio HAL crash-loop guard"
+_OP=$PATH; PATH=$TMP/pb2:$PATH
+if [ -z "$(command -v resetprop || true)" ]; then
+  rm -f "$HALWATCH"; _OSVC=$HAL_SVC; HAL_SVC=testhal
+  printf 100 > "$P/init.svc_debug_pid.testhal"
+  check "first pid: no loop" "$(hal_crash_loop && echo loop || echo fine)" "fine"
+  check "same pid again: no loop" "$(hal_crash_loop && echo loop || echo fine)" "fine"
+  printf 101 > "$P/init.svc_debug_pid.testhal"
+  check "one restart (a mode switch): no loop" "$(hal_crash_loop && echo loop || echo fine)" "fine"
+  printf 102 > "$P/init.svc_debug_pid.testhal"; hal_crash_loop
+  printf 103 > "$P/init.svc_debug_pid.testhal"
+  check "three restarts within a minute: loop" "$(hal_crash_loop && echo loop || echo fine)" "loop"
+  rm -f "$HALWATCH"; echo "$(( $(date +%s) - 200 )) 1" > "$HALWATCH"; echo "$(( $(date +%s) - 150 )) 2" >> "$HALWATCH"; echo "$(( $(date +%s) - 100 )) 3" >> "$HALWATCH"
+  printf 104 > "$P/init.svc_debug_pid.testhal"
+  check "restarts spread over minutes: no loop" "$(hal_crash_loop && echo loop || echo fine)" "fine"
+  rm -f "$HALWATCH"; HAL_SVC=$_OSVC
 else
   ok "skip - resetprop present on this host"
 fi

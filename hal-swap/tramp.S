@@ -22,3 +22,9 @@ RET2587C4:
         .balign 4096
         .globl PG37D
 PG37D:  .quad 0
+// The library slot (address, then the "failed" mark), as at 0x384ff0 in the HAL.
+        .balign 4096
+        .globl SLOTPAGE
+        .globl SLOT
+SLOTPAGE:
+SLOT:   .quad 0, 0

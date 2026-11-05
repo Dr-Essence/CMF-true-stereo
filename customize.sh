@@ -43,7 +43,8 @@ if [ -f "$DATADIR/stereo.conf" ]; then
   ADDED=0
   for KEY in ENABLED MODE WATCH_INTERVAL STARTUP_DELAY REQUIRE_SPEAKER_ROUTE \
              GUARD_CTL GUARD_VALUE PLAYBACK_CTL PLAYBACK_VALUE \
-             MIXER_CARD CHANNELS STEREO_ATTEN_DB LOG_LEVEL LOG_MAX_KB; do
+             MIXER_CARD CHANNELS STEREO_ATTEN_DB SPEAKER_BOOST BASS_PROTECT EARPIECE_LIMIT \
+             LOG_LEVEL LOG_MAX_KB; do
     grep -q "^[[:space:]]*$KEY=" "$DATADIR/stereo.conf" && continue
     DEF=$(grep "^$KEY=" "$MODPATH/config/stereo.conf" | head -n 1)
     [ -n "$DEF" ] || continue

@@ -41,7 +41,7 @@ nothing.
 
 ## Status
 
-**Current release: v1.0.3** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
+**Current release: v1.0.4** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
 in daily use on the test phone. Mono and Stereo switch without a reboot, and Magisk offers new
 releases as updates. Left and right follow the phone's orientation. Android swaps the channels
 itself at rotation 270 before the HAL (measured with the HAL's own recordings), except for an
@@ -107,6 +107,24 @@ carry such a track in `vendor.audiohal.cmf_swap`; the HAL swaps only those, only
 - Hi-res playback (USB Audio Player Pro, Direct 192 kHz) still works in stereo.
 
 **Not tested on a phone yet**
+- **v1.0.4 stereo protection** (`stereoctl protect`, both apps): the stereo HAL loads the
+  module's library (`/vendor/lib64/hw/libcmfstereo.so`, `protect/cmfstereo.c`) and runs, on
+  every speaker buffer after the rotation swap: the speaker's bass guard (the band below
+  100 Hz held at -8 / -14 / -20 dB below the amp's full output, only when louder; default
+  medium), a speaker peak limiter that keeps the peaks at Awinic's measured -5 dB when the
+  speaker boost (0-6 dB less fixed attenuation, default 0) is used, and an earpiece limiter at
+  -2.5 dBFS (on by default). Needs on the phone: that the HAL loads it (`stereoctl protect`
+  says running after the first sound), Stereo sounding the same at boost 0 apart from the
+  loudest deep bass, and a listen at boost 6. Tested here: the library's 20 host tests
+  (bit-exact when nothing is set, the swap as before, limiters never above their ceilings,
+  quiet bass unchanged within 0.3 dB from 30 Hz to 5 kHz, limiter distortion at most 1.2 %
+  at 50 Hz and under 0.1 % above 1 kHz, 12 streams, null inputs); the NDK build (needs only
+  libc, libm, libdl; rebuilds byte for byte); the HAL patch in the ARM64 emulator (24 cases:
+  loaded once, called with the HAL's arguments, a failed load not retried and the swap alone
+  run instead); every earlier stereo HAL (v0.9.0-v1.0.3) converting to the v1.0.4 file and
+  undoing to stock on the real file; settings, boost rules, amp handling and the crash-loop
+  guard in 190 checks under sh, dash, mksh and busybox. After a live switch from a mono boot
+  the library is not in place until a reboot: stereo then plays as v1.0.3, boost ignored.
 - **v1.0.3** "While playing" with a game and with a music player: the earpiece should now
   engage for both (before, only for music players). Tested here: the detector on stub
   controls under sh, dash, mksh and busybox (a game turning on only `dsp_fast` counts as
@@ -192,6 +210,11 @@ carry such a track in `vendor.audiohal.cmf_swap`; the HAL swaps only those, only
 - `ADDA_DL_MAX_VOL` was tried for a louder earpiece: no clear difference, left out.
 
 **Fixed recently**
+- v1.0.4: in stereo the speaker got up to about 10 dB more deep bass (100 Hz) than Awinic
+  lets through in mono, with no protection but the fixed attenuation, and the earpiece clipped
+  in its top 1.5 dB (DRIVER STUDY). The bass guard and the earpiece limiter hold both, and a
+  crash-loop guard puts the phone back on the stock files (mono) if the audio HAL restarts 3
+  times within a minute in stereo.
 - v1.0.3: in "While playing" (the default, and the only mode the clean app has) games and
   most apps that are not music players played on the speaker only: playback was detected
   from `dsp_music_runtime_en`, the DSP's music task alone, and a game plays through its fast

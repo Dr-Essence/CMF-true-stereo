@@ -63,6 +63,7 @@ was_playing=0
 atten_tick=0
 swap_tick=0
 last_rot=
+last_atten=
 
 while true; do
   # Re-read config each cycle so stereoctl edits take effect without a reboot.
@@ -103,7 +104,23 @@ while true; do
     # The Awinic driver writes a kernel log line for every volume read, so the
     # attenuation is checked when playback starts and every 10th cycle, not
     # every cycle (that flooded dmesg and pushed the boot messages out).
-    if { [ $_pb -eq 1 ] && [ $was_playing -eq 0 ]; } || [ $atten_tick -le 0 ]; then
+    # The protection's ceilings follow the settings and whether it runs; when
+    # the wanted attenuation changes (boost, speaker level, the library starting)
+    # the amp is set at once rather than at the next check.
+    if hal_crash_loop; then
+      log warn "the audio HAL restarted 3 times within a minute in stereo - back to mono (stock files)"
+      sed -i 's/^CHANNELS=.*/CHANNELS=mono/' "$CONF" 2>/dev/null
+      unstage_stereo
+      live_switch mono >/dev/null 2>&1 || log warn "live switch to mono failed: mono after a reboot"
+      rm -f "$HALWATCH"
+      update_description
+      nap "${WATCH_INTERVAL:-2}"
+      continue
+    fi
+    prot_apply
+    _ad=$(prot_atten_db)
+    if { [ $_pb -eq 1 ] && [ $was_playing -eq 0 ]; } || [ $atten_tick -le 0 ] || [ "$_ad" != "$last_atten" ]; then
+      last_atten=$_ad
       amp_hold_atten
       atten_tick=10
     fi

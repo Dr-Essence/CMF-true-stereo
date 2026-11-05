@@ -1,22 +1,24 @@
-// CMF true stereo: orientation swap for streams Android leaves unswapped.
+// CMF true stereo: orientation swap and protection, in the HAL's playback path.
 //
 // Replaces AudioALSAPlaybackHandlerBase::doStereoToMonoConversionIfNeed
-// (this, void* buffer, size_t bytes) at 0x27b820, which stereo mode already
-// turns into a plain return. Android swaps left and right itself at rotation
-// 270 (HAL recordings: a left-only beep reaches the HAL on the right), except
-// for a track whose session has its own effect chain (VLC's Dynamics
-// Processing, the test app's MOVIE + EFFECT: the beep stays on the left).
-// The module's daemon finds those (dumpsys media.audio_flinger) and writes the
-// output flags of their mixer threads to vendor.audiohal.cmf_swap. This
-// function swaps in place only when:
+// (this, void* buffer, size_t bytes) at 0x27b820 (508 bytes), which stereo mode
+// already turns into a plain return. On its first call it loads the module's
+// protection library (/vendor/lib64/hw/libcmfstereo.so, protect/cmfstereo.c)
+// and from then on calls its cmf_process(this, buffer, bytes): the rotation
+// swap, the speaker and bass limiters and the earpiece limiter. The library's
+// address (and a "failed" mark) is kept at 0x384ff0, in the HAL's last
+// writable page past the end of its .bss (data ends at 0x3849b8, the page at
+// 0x385000): mapped, zeroed, used by nothing else.
+//
+// If the library cannot be loaded, the function falls back to the swap alone,
+// the v1.0.2 code below: left and right swapped in place when
 //   - the stream goes to the speaker alone (devices vector at
-//     [[this+0x20]+0x1d8] is exactly { AUDIO_DEVICE_OUT_SPEAKER = 0x2 }:
-//     the same check MediaTek's fold made; headphones are never swapped),
+//     [[this+0x20]+0x1d8] is exactly { AUDIO_DEVICE_OUT_SPEAKER = 0x2 }),
 //   - vendor.audiohal.cmf_rotation reads 270 (earpiece on the right),
-//   - the stream's output flags ([[this+0x20]+0xc], the value MediaTek's
-//     write() log prints) share a bit with vendor.audiohal.cmf_swap,
-//   - the format at [[this+0x20]] is PCM_16_BIT (1) or PCM_32_BIT (3), the
-//     two MediaTek's fold handled.
+//   - the stream's output flags ([[this+0x20]+0xc]) share a bit with
+//     vendor.audiohal.cmf_swap (outputs carrying a track with its own effect
+//     chain, which Android leaves unswapped; written by the module's daemon),
+//   - the format at [[this+0x20]] is PCM_16_BIT (1) or PCM_32_BIT (3).
 // Always returns 0, as before.
 //
 // rotcave is reached from setParameters at 0x2587c0 (the "rotation" key was
@@ -32,6 +34,33 @@ swapfn:
         mov     x19, x0
         mov     x20, x1
         mov     x21, x2
+        adrp    x9, SLOTPAGE
+        add     x9, x9, :lo12:SLOT
+        ldr     x10, [x9]
+        cbnz    x10, 7f
+        ldr     w11, [x9, #8]
+        cbnz    w11, 8f
+        adr     x0, libpath
+        mov     w1, #2                  // RTLD_NOW
+        bl      DLOPEN
+        cbz     x0, 6f
+        adr     x1, symname
+        bl      DLSYM
+        cbz     x0, 6f
+        adrp    x9, SLOTPAGE
+        add     x9, x9, :lo12:SLOT
+        str     x0, [x9]
+        mov     x10, x0
+7:      mov     x0, x19
+        mov     x1, x20
+        mov     x2, x21
+        blr     x10
+        b       9f
+6:      adrp    x9, SLOTPAGE
+        add     x9, x9, :lo12:SLOT
+        mov     w11, #1
+        str     w11, [x9, #8]
+8:
         ldr     x8, [x19, #0x20]
         cbz     x8, 9f
         ldp     x9, x10, [x8, #0x1d8]
@@ -88,6 +117,8 @@ rotcave:
 
 key:    .asciz  "vendor.audiohal.cmf_rotation"
 swapkey: .asciz "vendor.audiohal.cmf_swap"
+libpath: .asciz "/vendor/lib64/hw/libcmfstereo.so"
+symname: .asciz "cmf_process"
         .balign 4
         .globl patch_end
 patch_end:
