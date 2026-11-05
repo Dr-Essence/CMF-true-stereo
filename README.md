@@ -51,6 +51,10 @@ on the left at 270). v1.0.2 swaps exactly those in the HAL: the daemon reads
 carry such a track in `vendor.audiohal.cmf_swap`; the HAL swaps only those, only at 270.
 
 **Verified on the phone**
+- v1.0.4 stereo protection: `stereoctl protect` reports it running after the first sound
+  (the HAL loaded the library), and every setting was tried and works. Seen: speaker level 5
+  (16 dB attenuation), boost 0, bass strong, earpiece on -> ceilings speaker off, bass -4 dBFS
+  (-20 dB below the amp's full output), earpiece -2.5 dBFS, as designed.
 - What "While playing" (MODE=playback) can watch, measured with the DSP's task switches
   logged each second: idle, nothing; a game, `dsp_fast_runtime_en`; a music player,
   `dsp_music_runtime_en` with `dsp_primary_runtime_en` (`dsp_deepbuf_runtime_en` for a moment);
