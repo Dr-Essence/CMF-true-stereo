@@ -839,6 +839,9 @@ Layout:
 
 ## Credits and licence
 
+- **[Dr.Essence](https://github.com/Dr-Essence)**: author and maintainer. Ideas, design decisions, and every test on a real phone (logs, recordings, measurements) that the work here rests on.
+- Code written with [Claude Code](https://claude.com/claude-code).
+
 The module is © 2026 Dr.Essence under [CC BY-NC-SA 4.0](LICENSE): use, copy,
 change and share it, as long as you credit Dr.Essence, do not use it
 commercially (including selling it or anything built from it), and share
