@@ -41,7 +41,7 @@ nothing.
 
 ## Status
 
-**Current release: v1.0.2** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
+**Current release: v1.0.3** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
 in daily use on the test phone. Mono and Stereo switch without a reboot, and Magisk offers new
 releases as updates. Left and right follow the phone's orientation. Android swaps the channels
 itself at rotation 270 before the HAL (measured with the HAL's own recordings), except for an
@@ -51,6 +51,10 @@ on the left at 270). v1.0.2 swaps exactly those in the HAL: the daemon reads
 carry such a track in `vendor.audiohal.cmf_swap`; the HAL swaps only those, only at 270.
 
 **Verified on the phone**
+- What "While playing" (MODE=playback) can watch, measured with the DSP's task switches
+  logged each second: idle, nothing; a game, `dsp_fast_runtime_en`; a music player,
+  `dsp_music_runtime_en` with `dsp_primary_runtime_en` (`dsp_deepbuf_runtime_en` for a moment);
+  stopped, nothing; `dsp_playback_runtime_en` and `aw_dev_0_switch` stay on throughout.
 - v1.0.2: VLC and the CMF L/R Test app's MOVIE + EFFECT button follow the rotation (the
   left-only file plays on the side of the earpiece or speaker it should), and USB Audio Player
   Pro in bit-perfect mode, and the CMF L/R Test app's AAUDIO (low latency, exclusive, as a
@@ -103,6 +107,11 @@ carry such a track in `vendor.audiohal.cmf_swap`; the HAL swaps only those, only
 - Hi-res playback (USB Audio Player Pro, Direct 192 kHz) still works in stereo.
 
 **Not tested on a phone yet**
+- **v1.0.3** "While playing" with a game and with a music player: the earpiece should now
+  engage for both (before, only for music players). Tested here: the detector on stub
+  controls under sh, dash, mksh and busybox (a game turning on only `dsp_fast` counts as
+  playing; all off, not playing; none readable, the procfs fallback), and the config line
+  the installer writes, sourced by mksh.
 - **v1.0.2**: an app with its own effect in another category (music, game) and an app with no
   effect after VLC (UAPP) in both orientations; only VLC and MOVIE + EFFECT were tried. Not
   yet checked: compressed offload with Dirac off (the one case where Android might grant
@@ -171,6 +180,12 @@ carry such a track in `vendor.audiohal.cmf_swap`; the HAL swaps only those, only
 - `ADDA_DL_MAX_VOL` was tried for a louder earpiece: no clear difference, left out.
 
 **Fixed recently**
+- v1.0.3: in "While playing" (the default, and the only mode the clean app has) games and
+  most apps that are not music players played on the speaker only: playback was detected
+  from `dsp_music_runtime_en`, the DSP's music task alone, and a game plays through its fast
+  task. Playback now counts when any DSP playback task is on (music, fast, primary, deep
+  buffer, VoIP, offload); `PLAYBACK_CTL` takes several controls separated by `|`. Updates
+  rewrite the setting, so installed phones get it without touching anything.
 - v1.0.2: VLC did not follow the rotation in v1.0.1. Measured: the CMF L/R Test app's MOVIE
   button with a Dynamics Processing effect on its own session (what VLC does) reached the HAL
   unswapped at rotation 270 (the beep stayed left), the same button without it swapped. The

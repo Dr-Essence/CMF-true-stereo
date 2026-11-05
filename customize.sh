@@ -62,16 +62,20 @@ else
   ui_print "  installed default stereo.conf"
 fi
 
+# The DSP task switches that mean "audio is playing" (any one of them).
+CMF1_PLAYBACK_CTLS='dsp_music_runtime_en|dsp_fast_runtime_en|dsp_primary_runtime_en|dsp_deepbuf_runtime_en|dsp_voipdl_runtime_en|dsp_offload_runtime_en'
+
 # The guard is device-specific, so set it where we know what it should be.
 if [ "$IS_CMF1" = 1 ]; then
   sed -i "s/^GUARD_CTL=.*/GUARD_CTL='aw_dev_0_switch'/; s/^GUARD_VALUE=.*/GUARD_VALUE='Enable'/" \
     "$DATADIR/stereo.conf" 2>/dev/null
   ui_print "  guard: earpiece follows the speaker amp"
-  # Measured with 'stereoctl diff': this flips Off->On when media starts, and
-  # media here is DSP-offloaded, so the procfs scan never sees it.
-  sed -i "s/^PLAYBACK_CTL=.*/PLAYBACK_CTL='dsp_music_runtime_en'/; s/^PLAYBACK_VALUE=.*/PLAYBACK_VALUE='1'/" \
+  # Each kind of output has its own DSP task switch, and the procfs scan never
+  # sees DSP playback. Measured on the phone: games turn on dsp_fast, music
+  # players dsp_music and dsp_primary; dsp_playback is always on (useless).
+  sed -i "s/^PLAYBACK_CTL=.*/PLAYBACK_CTL='$CMF1_PLAYBACK_CTLS'/; s/^PLAYBACK_VALUE=.*/PLAYBACK_VALUE='1'/" \
     "$DATADIR/stereo.conf" 2>/dev/null
-  ui_print "  playback detected via dsp_music_runtime_en"
+  ui_print "  playback detected on every DSP playback task (music, fast, primary, ...)"
 fi
 
 # Ship the verified routing on the device it was verified on. An actions.conf

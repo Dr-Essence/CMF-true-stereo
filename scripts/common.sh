@@ -209,18 +209,33 @@ ctl_exists() {
 # /proc/asound - so on such a device MODE=playback would never engage while
 # MODE=always worked, which is exactly the symptom seen on the CMF Phone 1.
 #
-# PLAYBACK_CTL names a mixer control the HAL flips when media starts (found
-# with 'stereoctl diff'), and is authoritative when set and readable. The
-# procfs scan stays as the fallback for devices without one.
+# PLAYBACK_CTL names the mixer controls the HAL flips when audio starts (found
+# with 'stereoctl diff'), separated by '|': audio is playing when any of them
+# reads PLAYBACK_VALUE. They are authoritative when at least one is readable;
+# the procfs scan stays as the fallback for devices without them.
+#
+# On the CMF Phone 1 each kind of output has its own DSP task switch
+# (dsp_<task>_runtime_en). Measured on the phone: a game turns on only
+# dsp_fast, a music player dsp_music with dsp_primary (dsp_deepbuf for a
+# moment), and nothing stays on when it stops; dsp_playback is on all the
+# time, so it says nothing. Watching dsp_music alone left games on the
+# speaker only in MODE=playback.
 playback_active() {
   if [ -n "${PLAYBACK_CTL:-}" ]; then
-    _pb=$(ctl_get "$PLAYBACK_CTL" 2>/dev/null)
-    if [ -n "$_pb" ]; then
+    _seen=0
+    _rest=$PLAYBACK_CTL
+    while [ -n "$_rest" ]; do
+      _c=${_rest%%"|"*}
+      case $_rest in *'|'*) _rest=${_rest#*"|"} ;; *) _rest= ;; esac
+      [ -n "$_c" ] || continue
+      _pb=$(ctl_get "$_c" 2>/dev/null)
+      [ -n "$_pb" ] || continue
+      _seen=1
       [ "$_pb" = "${PLAYBACK_VALUE:-1}" ] && return 0
-      return 1
-    fi
-    # Control missing (renamed by a vendor update?): fall through rather than
-    # silently reporting "never playing" forever.
+    done
+    [ $_seen -eq 1 ] && return 1
+    # No control readable (renamed by a vendor update?): fall through rather
+    # than silently reporting "never playing" forever.
   fi
 
   for _s in /proc/asound/card*/pcm*p/sub*/status; do
@@ -232,11 +247,14 @@ playback_active() {
 
 # Which detector answered, for diagnostics.
 playback_detector() {
-  if [ -n "${PLAYBACK_CTL:-}" ] && [ -n "$(ctl_get "$PLAYBACK_CTL" 2>/dev/null)" ]; then
-    echo "mixer control '$PLAYBACK_CTL'"
-  else
-    echo "procfs substream scan"
-  fi
+  _ok=
+  _rest=${PLAYBACK_CTL:-}
+  while [ -n "$_rest" ]; do
+    _c=${_rest%%"|"*}
+    case $_rest in *'|'*) _rest=${_rest#*"|"} ;; *) _rest= ;; esac
+    [ -n "$_c" ] && [ -n "$(ctl_get "$_c" 2>/dev/null)" ] && _ok="$_ok${_ok:+, }$_c"
+  done
+  if [ -n "$_ok" ]; then echo "mixer controls: $_ok"; else echo "procfs substream scan"; fi
 }
 
 # Best-effort check that audio is going out of the speaker rather than

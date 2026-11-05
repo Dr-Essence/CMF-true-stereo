@@ -85,6 +85,8 @@ case "$1" in
       'RCV Mux')                  echo 'Open, Mute, > Voice Playback, Test Mode,' ;;
       'Handset Volume')           echo '31 (range 0->18)' ;;
       'ADDA_DL_CH1 DL_24CH_CH1')  echo 'Off' ;;
+      dsp_music_runtime_en)       echo 'Off' ;;
+      dsp_fast_runtime_en)        echo "${FAST_STATE:-Off}" ;;
       # Real tinymix errors out on an unknown control rather than
       # answering with a value.
       *) echo 'Invalid mixer control' >&2; exit 1 ;;
@@ -129,6 +131,18 @@ check "detector names the control" \
 PLAYBACK_CTL='No Such Control'; PLAYBACK_VALUE=1
 check "missing control falls back to procfs" \
   "$(playback_detector)" "procfs substream scan"
+# Several task switches: a game turns on only dsp_fast (measured on the phone).
+PLAYBACK_CTL='dsp_music_runtime_en|dsp_fast_runtime_en|No Such Control'; PLAYBACK_VALUE=1
+export FAST_STATE=Off
+check "task switches all off: not playing" "$(playback_active && echo yes || echo no)" "no"
+export FAST_STATE=On
+check "only dsp_fast on (a game): playing" "$(playback_active && echo yes || echo no)" "yes"
+check "detector lists the readable switches" "$(playback_detector)" "mixer controls: dsp_music_runtime_en, dsp_fast_runtime_en"
+unset FAST_STATE
+PLAYBACK_CTL='No Such Control|Another Missing'; PLAYBACK_VALUE=1
+check "none of the switches readable -> procfs" "$(playback_detector)" "procfs substream scan"
+check "the installer lists every playback task" \
+  "$(grep -c "^CMF1_PLAYBACK_CTLS='dsp_music_runtime_en|dsp_fast_runtime_en|dsp_primary_runtime_en|" "$ROOT/customize.sh")" "1"
 PLAYBACK_CTL=; PLAYBACK_VALUE=1
 check "no control configured -> procfs" \
   "$(playback_detector)" "procfs substream scan"
