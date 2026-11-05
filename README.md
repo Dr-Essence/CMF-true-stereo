@@ -41,10 +41,11 @@ nothing.
 
 ## Status
 
-**Current release: v0.9.8** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
+**Current release: v0.9.9** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is
 in daily use on the test phone. Mono and Stereo switch without a reboot, left and right
-follow the phone's orientation, and Magisk offers new releases as updates. v0.9.8 adds the
-Action button, a live state line on the module's card, and a guard for Nothing OS updates.
+follow the phone's orientation, and Magisk offers new releases as updates. v0.9.9 fixes the
+Action button's switch to Stereo (it crashed the audio service), makes a failed switch fall
+back safely, and decides the orientation swap by Nothing's Dirac tuning instead of the output.
 
 **Verified on the phone**
 - Magisk's Update button: with v0.9.6 installed, Magisk showed **Update** for this module
@@ -53,9 +54,11 @@ Action button, a live state line on the module's card, and a guard for Nothing O
   Dr.Essence.
 - v0.9.5 orientation swap: the left-only test file in VLC (deep-buffer output) and in USB Audio
   Player Pro (primary output, where Nothing's Dirac does the swap): earpiece on your left, the
-  earpiece plays; on your right, the speaker plays. The first build cancelled Dirac's own swap
-  on the primary output; diagnostic builds found it, and the patch now leaves that output to
-  Dirac.
+  earpiece plays; on your right, the speaker plays. (Then UAPP played on the primary output
+  in Dirac's MUSIC tuning; v0.9.9 replaced the output rule, see Fixed.)
+- v0.9.8 Action button, live card text and Update button: Action switched Mono, the card
+  showed v0.9.8 by Dr.Essence. Action's switch back to Stereo crashed the audio service
+  (fixed in v0.9.9).
 - v0.9.4 live switching: Mono -> Stereo -> Mono -> Stereo with `stereoctl channels`, no reboot,
   each checked with the left-only test file (speaker silent in Stereo, both play in Mono).
   The first two builds refused it safely (no stock copy; then mounting over the deleted
@@ -84,9 +87,16 @@ Action button, a live state line on the module's card, and a guard for Nothing O
   patched from the old build over the new one; the card and `stereoctl status` then say
   stereo is unavailable. Tested on fake vendor files (different HAL, different DSP config,
   missing HAL); seen on the phone only with the next Nothing OS update.
-- The orientation swap with Nothing's Dirac switched off: apps on the primary output are then
-  not swapped (known limit; nothing swaps them).
-- Live switching from the app's Mono/Stereo buttons (needs the next app build).
+- v0.9.9 orientation swap by Dirac's tuning: needs both orientations checked with the
+  left-only file in USB Audio Player Pro (Android driver; Dirac MUSIC) and VLC (Dirac MOVIE).
+  Tested in the ARM64 emulator (Dirac MUSIC and on: not swapped; MOVIE, off, or unreadable
+  value: swapped or the earlier rule). Not known yet: whether the audio HAL may read
+  `persist.vendor.newdirac.*` under the phone's SELinux rules (if not, the earlier rule
+  stands: `logcat | grep "Access denied finding property"` would show it), and how games
+  (GAME) and navigation apps (SPEECH) behave.
+- v0.9.9 Action button: switching to Stereo from it (the v0.9.8 bug below), and a failed live
+  switch ending on the stock files (tested on bind mounts over a Magisk-style skeleton).
+- Live switching from the app's Mono/Stereo buttons.
 - v0.9.3: on/off speed and the lighter daemon. Passes the test suite under mksh (Android's
   shell), dash and busybox; needs a check on the phone: `time su -c stereoctl off`, then
   `time su -c stereoctl on`, and the earpiece still engaging when audio starts.
@@ -121,6 +131,21 @@ Action button, a live state line on the module's card, and a guard for Nothing O
 - `ADDA_DL_MAX_VOL` was tried for a louder earpiece: no clear difference, left out.
 
 **Fixed recently**
+- v0.9.9: the Action button's switch to Stereo crashed the audio service until a reboot.
+  Magisk starts `action.sh` as `./action.sh`, so the module folder was "."; the stereo file
+  was then mounted from `./system/...` resolved at init's root, i.e. `/vendor/...` itself:
+  Magisk's empty placeholder (Magisk 31 builds `/vendor/lib64/hw` as a tmpfs skeleton).
+  The failed switch then took the module's mounts off and restarted the HAL on those empty
+  files; audioserver crash-looped (`stoi: no conversion`) and `system_server` and
+  `audioserver` used a lot of CPU. Now the folder is always absolute, and a failed switch
+  mounts the checked stock copies and restarts the HAL only once all three files read back
+  as stock; otherwise it leaves the running HAL alone and asks for a reboot.
+- v0.9.9: USB Audio Player Pro played reversed with the earpiece on the right once it played
+  on the deep-buffer output. Measured: Nothing's audio service gives each app a Dirac
+  tuning (VLC is on its video list -> MOVIE; apps on no list, like UAPP -> MUSIC), and only
+  MUSIC swaps left and right with the rotation itself. The swap now follows
+  `persist.vendor.newdirac.cur.config` / `.enable.value` instead of skipping the primary
+  output.
 - v0.9.8: after a Nothing OS update the old stereo overlay (patched from the previous build)
   would still have been mounted over the new vendor files; only two failed boots removed it.
 - v0.9.7: the module was still listed in Magisk as by Tiimoo-debug; it now says Dr.Essence.
@@ -397,9 +422,16 @@ the new build has been checked.
   the HAL under the phone's own SELinux rules) and, for the speaker-only route
   in 16- or 32-bit PCM (the cases MediaTek's fold handled), swaps the two
   channels of every buffer while it reads 270. Headphones and every other
-  route are never touched, and neither is the primary output: Nothing's Dirac
-  sits there and already swaps it with the rotation (measured), so swapping it
-  again would cancel Dirac's. The code is `hal-swap/patch.S`; `hal-swap/run.sh`
+  route are never touched. Nothing's Dirac follows the music stream to whichever
+  output plays it and, in its MUSIC tuning, already swaps left and right with
+  the rotation itself; in MOVIE it does not (measured: same output, UAPP right
+  only without this swap, VLC only with it). Nothing's audio service picks the
+  tuning per app (`com.nothing.audioeffect`: video-list apps MOVIE, games GAME,
+  navigation SPEECH, everything else MUSIC) and Dirac keeps it in
+  `persist.vendor.newdirac.cur.config`, so the swap is skipped while that reads
+  MUSIC and `persist.vendor.newdirac.enable.value` reads 1. (v0.9.5-v0.9.8
+  skipped the primary output instead, which held only while MUSIC apps played
+  there.) The code is `hal-swap/patch.S`; `hal-swap/run.sh`
   assembles it, runs it in an ARM64 emulator against test buffers, and checks
   the module carries exactly those bytes.
 

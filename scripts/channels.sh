@@ -35,7 +35,10 @@
 HAL_NAMES="audio.primary.mt6878.so audio.primary.mediatek.so"
 HAL_DIR=/vendor/lib64/hw
 HAL_STOCK=28db2e24e9d4c4f88a67a7631ab581fa064bb03a47a87314b7599a2cb757a324
-HAL_STEREO=58a5755e0203183ad7fa541528305a3040f204e503528ad9182f4118fe1368d9
+HAL_STEREO=c1f3dd1f02bd4afc34ab0dd76f8900ad3577893bfcae8b7f2a3c81946c61bd2c
+# v0.9.5-v0.9.8 stereo (skipped the primary output, not Dirac's MUSIC tuning):
+# patched again in place, which gives the current one.
+HAL_STEREO_V2=58a5755e0203183ad7fa541528305a3040f204e503528ad9182f4118fe1368d9
 # v0.9.0-v0.9.4 stereo (no orientation swap): converted on the next staging.
 HAL_STEREO_V1=2615f6e28e40a0520f6122e03513f374294e011fa3c654801e898f5ea62a5edf
 
@@ -52,21 +55,22 @@ OV_ETC=$MODDIR/system/vendor/etc
 
 _sha() { sha256sum "$1" 2>/dev/null | cut -d' ' -f1; }
 
-# Patch a stock HAL copy in place (229 bytes in four spots):
+# Patch a stock HAL copy in place (444 bytes in four spots):
 #   0x27b820 doStereoToMonoConversionIfNeed: replaced by the orientation swap
-#            and the rotation store (hal-swap/patch.S, 244 bytes, assembled
+#            and the rotation store (hal-swap/patch.S, 432 bytes, assembled
 #            and tested in an ARM64 emulator: hal-swap/run.sh); swaps left and
 #            right for the speaker-only route when the phone is turned with
-#            the earpiece on the right (Android's rotation=270), except on the
-#            primary output, where Nothing's Dirac already swaps it
+#            the earpiece on the right (Android's rotation=270), except while
+#            Nothing's Dirac is on in its MUSIC tuning, which swaps the
+#            stream itself
 #   0x2587c0 setParameters, "rotation" key: b to the rotation store, which
 #            keeps the value in vendor.audiohal.cmf_rotation (the stock HAL
 #            only drops it) and returns
 #   0x27f2d4 InitArsiTaskConfig         b.ne -> nop (always set hw_info 0x4)
 #   0x1e0a00 SetArsiTaskConfig          b.ne -> nop (same, DSP stream manager)
-HAL_SWAP_BODY='\375\173\275\251\375\003\000\221\363\123\001\251\365\023\000\371\363\003\000\252\364\003\001\252\365\003\002\252\150\022\100\371\150\004\000\264\011\251\135\251\113\001\011\313\177\021\000\361\341\003\000\124\053\001\100\271\177\011\000\161\201\003\000\124\013\015\100\271\113\003\010\067\140\004\000\020\341\003\037\052\340\213\003\224\037\070\004\161\241\002\000\124\150\022\100\371\010\001\100\271\037\015\000\161\140\001\000\124\037\005\000\161\341\001\000\124\251\376\102\323\251\001\000\264\212\002\100\271\112\101\212\023\212\106\000\270\051\005\000\361\201\377\377\124\007\000\000\024\251\376\103\323\251\000\000\264\212\056\100\051\213\052\201\050\051\005\000\361\241\377\377\124\340\003\037\052\365\023\100\371\363\123\101\251\375\173\303\250\300\003\137\326\341\343\101\371\200\000\000\020\366\235\003\224\001\010\000\320\265\163\377\027\166\145\156\144\157\162\056\141\165\144\151\157\150\141\154\056\143\155\146\137\162\157\164\141\164\151\157\156\000\000\000\000'
+HAL_SWAP_BODY='\375\173\275\251\375\003\000\221\363\123\001\251\365\023\000\371\363\003\000\252\364\003\001\252\365\003\002\252\150\022\100\371\250\007\000\264\011\251\135\251\113\001\011\313\177\021\000\361\041\007\000\124\053\001\100\271\177\011\000\161\301\006\000\124\340\007\000\020\341\003\037\052\342\213\003\224\037\070\004\161\041\006\000\124\377\203\001\321\000\010\000\060\341\003\000\221\002\012\000\060\217\221\003\224\351\003\100\071\077\375\000\161\301\000\000\124\377\203\001\221\150\022\100\371\013\015\100\271\253\004\010\067\020\000\000\024\351\003\100\371\051\275\100\222\312\010\000\130\077\001\012\353\101\001\000\124\000\007\000\020\341\003\000\221\242\005\000\020\176\221\003\224\351\003\100\071\077\305\000\161\141\000\000\124\377\203\001\221\026\000\000\024\377\203\001\221\150\022\100\371\010\001\100\271\037\015\000\161\140\001\000\124\037\005\000\161\341\001\000\124\251\376\102\323\251\001\000\264\212\002\100\271\112\101\212\023\212\106\000\270\051\005\000\361\201\377\377\124\007\000\000\024\251\376\103\323\251\000\000\264\212\056\100\051\213\052\201\050\051\005\000\361\241\377\377\124\340\003\037\052\365\023\100\371\363\123\101\251\375\173\303\250\300\003\137\326\341\343\101\371\200\000\000\020\334\235\003\224\001\010\000\320\233\163\377\027\166\145\156\144\157\162\056\141\165\144\151\157\150\141\154\056\143\155\146\137\162\157\164\141\164\151\157\156\000\160\145\162\163\151\163\164\056\166\145\156\144\157\162\056\156\145\167\144\151\162\141\143\056\143\165\162\056\143\157\156\146\151\147\000\160\145\162\163\151\163\164\056\166\145\156\144\157\162\056\156\145\167\144\151\162\141\143\056\145\156\141\142\154\145\056\166\141\154\165\145\000\077\000\000\037\040\003\325\115\125\123\111\103\000\000\000'
 # b rotcave, written at 0x2587c0 (rotcave sits inside the body above).
-HAL_SWAP_B='\110\214\000\024'
+HAL_SWAP_B='\142\214\000\024'
 _patch_hal() {
   printf "$HAL_SWAP_BODY" | dd of="$1" bs=1 seek=2603040 conv=notrunc 2>/dev/null &&
   printf "$HAL_SWAP_B" | dd of="$1" bs=1 seek=2459584 conv=notrunc 2>/dev/null &&
@@ -132,7 +136,7 @@ build_known() {
     _f=$(_view "$HAL_DIR/$_n")
     [ -f "$_f" ] || return 2
     case $(_sha "$_f") in
-      "$HAL_STOCK"|"$HAL_STEREO"|"$HAL_STEREO_V1") ;;
+      "$HAL_STOCK"|"$HAL_STEREO"|"$HAL_STEREO_V2"|"$HAL_STEREO_V1") ;;
       *) return 1 ;;
     esac
   done
@@ -173,6 +177,8 @@ stage_stereo() {
     case $_h in
       "$HAL_STOCK")  _patch_hal "$_tmp/$_n" || { _fail="patching $_n failed"; break; } ;;
       "$HAL_STEREO") ;;   # already ours (overlay mounted): keep as is
+      "$HAL_STEREO_V2")   # v0.9.5-v0.9.8: same spots, the patch rewrites them all
+        _patch_hal "$_tmp/$_n" || { _fail="converting the earlier stereo $_n failed"; break; } ;;
       "$HAL_STEREO_V1")   # the earlier stereo build: back to stock, then patch
         { _unpatch_hal_v1 "$_tmp/$_n" && [ "$(_sha "$_tmp/$_n")" = "$HAL_STOCK" ] && _patch_hal "$_tmp/$_n"; } ||
           { _fail="converting the earlier stereo $_n failed"; break; } ;;
@@ -379,7 +385,11 @@ live_switch() {
   # system shows now; nothing to do if that is already the wanted mode.
   _now=mono; stereo_active && _now=stereo
   # The earlier stereo HAL (no orientation swap) is replaced live too.
-  [ "$_now" = stereo ] && [ "$(_sha "$(_view "$HAL_DIR/audio.primary.mt6878.so")")" = "$HAL_STEREO_V1" ] && _now=stereo-v1
+  if [ "$_now" = stereo ]; then
+    case $(_sha "$(_view "$HAL_DIR/audio.primary.mt6878.so")") in
+      "$HAL_STEREO_V1"|"$HAL_STEREO_V2") _now=stereo-old ;;
+    esac
+  fi
   [ "$_now" = "$1" ] && { echo unchanged; return 0; }
   if in_call; then echo "a call is active"; return 1; fi
   # Stereo always mounts the staged files: check them before touching anything.

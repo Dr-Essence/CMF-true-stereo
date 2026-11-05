@@ -496,6 +496,13 @@ AUR_STOCK=$(_sha "$K/stock.xml"); AUR_STEREO=$(_sha "$AUR")
 check "the patch changes the HAL" "$([ "$HAL_STOCK" != "$HAL_STEREO" ] && echo yes)" "yes"
 cp "$K/cur.so" "$K/conv.so"; cp "$HAL_DIR/audio.primary.mt6878.so" "$K/conv.so"
 check "earlier stereo converts to the current one" "$(_unpatch_hal_v1 "$K/conv.so" && _patch_hal "$K/conv.so" && _sha "$K/conv.so")" "$HAL_STEREO"
+# v0.9.5-v0.9.8: a shorter body and another branch in the same spots; the
+# current patch covers every byte of it.
+cp "$K/stock.so" "$K/v2.so"; head -c 244 /dev/urandom | dd of="$K/v2.so" bs=1 seek=2603040 conv=notrunc 2>/dev/null
+printf '\110\214\000\024' | dd of="$K/v2.so" bs=1 seek=2459584 conv=notrunc 2>/dev/null
+printf '\037\040\003\325' | dd of="$K/v2.so" bs=1 seek=2618068 conv=notrunc 2>/dev/null
+printf '\037\040\003\325' | dd of="$K/v2.so" bs=1 seek=1968640 conv=notrunc 2>/dev/null
+check "v0.9.5-v0.9.8 stereo patches straight to the current one" "$(_patch_hal "$K/v2.so" && _sha "$K/v2.so")" "$HAL_STEREO"
 check "rebuilt from an earlier-stereo boot" "$(save_stock && echo ok)" "ok"
 check "HAL back to the stock hash" "$(_sha "$STOCKDIR/audio.primary.mediatek.so")" "$HAL_STOCK"
 check "DSP config back to the stock hash" "$(_sha "$STOCKDIR/aurisys_config_rv.xml")" "$AUR_STOCK"

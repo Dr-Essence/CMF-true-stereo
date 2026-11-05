@@ -8,6 +8,15 @@ static void cp(char *d, const char *s) { while ((*d++ = *s++)); }
 static int eq(const char *a, const char *b) { while (*a && *a == *b) a++, b++; return *a == *b; }
 int PGI(const char *key, int def) { pgi_calls++; cp(kbuf, key); return prop_val; }
 int PSET(const char *k, const char *v) { cp(kbuf, k); cp(vbuf, v); return 0; }
+static const char *dirac_cfg = "", *dirac_on = "";
+static int pg_calls, unreadable;
+int PG(const char *k, char *v, const char *def) {
+  pg_calls++;
+  const char *s = eq(k, "persist.vendor.newdirac.cur.config") ? dirac_cfg :
+                  eq(k, "persist.vendor.newdirac.enable.value") ? dirac_on : def;
+  if (!*s || unreadable) s = def;
+  cp(v, s);
+  return 0; }
 struct attr { u32 fmt; u32 pad1[2]; u32 flags; char pad[0x1d8 - 16]; u32 *vb, *ve; };
 struct handler { char pad[0x20]; struct attr *a; };
 static void wr(const char *s) { long n = 0; while (s[n]) n++;
@@ -52,9 +61,36 @@ int main(void) {
   h.a = 0; r = swapfn(&h, b32, 16);
   check("no attributes: returns 0", r == 0 && b32[0]==0x11111111);
   h.a = &at; at.fmt = 3;
-  at.flags = 0x2; SET32 pgi_calls = 0;
+  // Dirac: MUSIC + on swaps the stream itself, on any output.
+  dirac_cfg = "MUSIC"; dirac_on = "1.000000"; SET32
   swapfn(&h, b32, 16);
-  check("primary output (Dirac swaps it): untouched", b32[0]==0x11111111 && pgi_calls == 0);
+  check("Dirac MUSIC and on: untouched", b32[0]==0x11111111);
+  at.flags = 0x2; SET32
+  swapfn(&h, b32, 16);
+  check("Dirac MUSIC, primary output: untouched", b32[0]==0x11111111);
+  dirac_cfg = "MOVIE"; SET32
+  swapfn(&h, b32, 16);
+  check("Dirac MOVIE, primary output: swapped", b32[0]==0x22222222);
+  dirac_cfg = "MUSIC"; dirac_on = "0.000000"; SET32
+  swapfn(&h, b32, 16);
+  check("Dirac MUSIC but off: swapped", b32[0]==0x22222222);
+  dirac_on = "1.000000"; dirac_cfg = "MUSICAL"; SET32
+  swapfn(&h, b32, 16);
+  check("a value that only starts with MUSIC: swapped", b32[0]==0x22222222);
+  dirac_cfg = "MUSIC"; unreadable = 1; at.flags = 0x2; SET32
+  swapfn(&h, b32, 16);
+  check("tuning unreadable, primary output: untouched (earlier rule)", b32[0]==0x11111111);
+  at.flags = 0x8; SET32
+  swapfn(&h, b32, 16);
+  check("tuning unreadable, deep buffer: swapped (earlier rule)", b32[0]==0x22222222);
+  unreadable = 0; at.flags = 0x2;
+  dirac_cfg = ""; dirac_on = ""; SET32 pg_calls = 0;
+  swapfn(&h, b32, 16);
+  check("no Dirac properties: earlier rule (primary untouched)", b32[0]==0x11111111 && pg_calls == 1);
+  prop_val = 90; SET32 pg_calls = 0;
+  swapfn(&h, b32, 16);
+  check("rotation 90: Dirac not even read", b32[0]==0x11111111 && pg_calls == 0);
+  prop_val = 270;
   at.flags = 0x4; SET32
   swapfn(&h, b32, 16);
   check("fast output: swapped", b32[0]==0x22222222 && b32[1]==0x11111111);
