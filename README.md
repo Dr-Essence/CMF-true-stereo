@@ -53,10 +53,10 @@ back safely, and decides the orientation swap by Nothing's Dirac tuning instead 
 - v0.9.9 Action button: switching Mono and Stereo from Magisk works; the audio service kept
   running (v0.9.8 crashed it on the switch to Stereo). One try left UAPP crashing once; it
   did not happen again.
-- v0.9.9 in Dirac's GAME tuning: VLC added to Nothing's game list (force-stopped and
-  reopened so the tuning applies), left-only file: right with the earpiece on either side, so
-  Dirac does not swap in GAME and the module does. A first try without the force-stop still
-  ran the old tuning and sounded doubled; the earlier "game" check was made in Mono.
+- VLC added to Nothing's Game mode (game dashboard): still right with the earpiece on either
+  side, but Dirac's tuning stayed MOVIE (`persist.vendor.newdirac.cur.config`), so this did
+  not test Dirac's GAME tuning: that comes only from the game list built into
+  `com.nothing.audioeffect` (125 apps, mostly Tencent titles), not from Game mode.
 - v0.9.9 orientation swap in apps and games: YouTube (on Nothing's video list, Dirac MOVIE:
   the module swaps) follows the rotation, and a game (The Amazing Spider-Man 2, 64-bit port,
   on no list: Dirac MUSIC) switches sides when turned (checked by ear in the game only).
@@ -99,8 +99,11 @@ back safely, and decides the orientation swap by Nothing's Dirac tuning instead 
   patched from the old build over the new one; the card and `stereoctl status` then say
   stereo is unavailable. Tested on fake vendor files (different HAL, different DSP config,
   missing HAL); seen on the phone only with the next Nothing OS update.
-- v0.9.9: navigation apps (Dirac SPEECH): whether Dirac swaps in that tuning. Apps Nothing
-  blacklists (Dirac off) should be swapped by the module. Games that play through AAudio's MMAP path would bypass the swap.
+- v0.9.9: games on the list built into Nothing's audio app (Dirac GAME, e.g. PUBG Mobile,
+  Call of Duty Mobile) and navigation apps (Dirac SPEECH): whether Dirac swaps in those
+  tunings. Check: play the game, `getprop persist.vendor.newdirac.cur.config` must read GAME,
+  then a sound known to come from the left. Apps Nothing blacklists (Dirac off) should be
+  swapped by the module. Games that play through AAudio's MMAP path would bypass the swap.
 - v0.9.9: a failed live switch ending on the stock files (tested on bind mounts over a
   Magisk-style skeleton; no failure has happened on the phone since).
 - Live switching from the app's Mono/Stereo buttons.
