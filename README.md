@@ -42,7 +42,17 @@ nothing.
 
 ## Status
 
-**Current release: v1.0.6** (CMF Phone 1, Nothing OS B4.1, Android 16). Stereo works and is in
+**Current release: v1.0.6.** Tested on one CMF Phone 1 (A015), EEA:
+
+| | |
+|---|---|
+| Nothing OS | 4.1, `Tetris-B4.1-260615-1652-EEA` (`ro.build.display.id` B4.1-260615-1652, product TetrisEEA) |
+| Android | 16 (`BP2A.250605.031.A3`), security patch 2026-06-01 |
+| Vendor | `UP1A.231005.007` (Android 14 vendor, where the audio HAL is) |
+
+Other regions (Global, India) are untested: the module checks the audio files by hash and
+only patches the exact ones it was built for, so on a build whose files differ it stays in
+Mono and changes nothing. Stereo works and is in
 daily use on the test phone, with the module's own protection running in the audio HAL (deep
 bass guard, earpiece limiter, optional speaker boost and earpiece leveller). Mono and Stereo switch without a reboot,
 and Magisk offers new releases as updates. Left and right follow the phone's orientation for
@@ -125,7 +135,7 @@ Getting stereo took finding the two places the phone folds the speaker to
 mono; the [Findings](#findings-what-this-device-actually-does) section shows
 the measurements rather than asking you to take my word.
 
-Verified on **A015 / Tetris, MT6878, Nothing OS B4.1, Android 16.**
+Verified on **A015 / Tetris, MT6878, Nothing OS 4.1 (Tetris-B4.1-260615-1652-EEA), Android 16.**
 
 ## What it does
 
