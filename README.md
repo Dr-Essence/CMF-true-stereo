@@ -370,22 +370,27 @@ the new build has been checked.
 
 **Risks, plainly:**
 
-
-- Awinic's processing keeps the speaker within its excursion and temperature
-  limits at high volume, from a live model of the speaker. In stereo, media gets
-  the amp's hardware over-temperature / over-current cut-outs, the attenuation,
-  and the module's fixed protection (peak and deep-bass limits measured against
-  Awinic's, no temperature model). Use mono for loud listening, raise
-  `STEREO_ATTEN_DB` if you play loud in stereo, and back off at the first
+- **The speaker in stereo.** In mono, Awinic keeps the speaker within its excursion and
+  temperature limits from a live model of the speaker. In stereo, media gets the amp's own
+  hardware over-temperature and over-current cut-outs, plus the module's protection: the
+  speaker's peaks held 6 dB below the amp's full output at speaker level 10 (2 dB more per
+  level down), and its deepest bass held back when it gets loud (the deep bass guard). Both
+  were measured against Awinic's, but they are fixed limits: there is **no temperature
+  model**. Speaker boost makes it louder without raising those peaks. For long, loud
+  listening use **mono**; in stereo, lower the speaker level and back off at the first
   distortion.
-- If the audio HAL restarts 3 times within a minute in stereo, the daemon puts
-  the stock files back (mono) at once.
-- The earpiece has no protection in either mode (that was already true).
-- Two failed boots with the stereo overlay in place remove it and set
-  `CHANNELS=mono` — the same watchdog the audio-policy overlay has.
-- With the daemon stopped (`stereoctl off`) the amp goes back to its stock
-  left slot on the next stream, so in stereo the speaker would play the left
-  channel alone. Switch to mono if you want the module off.
+- **The earpiece.** In stereo the earpiece limiter (on by default) holds it at -2.5 dBFS,
+  below where it starts to crackle, and the earpiece leveller never lifts its peaks above
+  that. In mono the earpiece plays the stock way, without protection (as it always did).
+- **Safety nets.** If the audio HAL restarts 3 times within a minute in stereo, the daemon
+  puts the stock files back (mono) at once. Two failed boots with the stereo overlay in place
+  remove it and set `CHANNELS=mono`, the same watchdog the audio-policy overlay has. Both are
+  covered by the tests on fake files; neither has been needed on the phone yet.
+- **`stereoctl off`** stops the daemon. In stereo the amp then goes back to its stock left
+  slot on the next stream, so the speaker would play the left channel alone: switch to mono
+  if you want the module off.
+- **Two apps at once:** an app with its own audio effect (VLC) and an ordinary app playing
+  together, earpiece on the right: one of them comes out reversed (the HAL sees only the mix).
 - **Orientation**: turned with the earpiece on your right, Android itself swaps left and
   right before the audio HAL (the HAL's own recordings show the channels already swapped at
   rotation 270), except for a track whose session has its own audio effect chain (VLC's
