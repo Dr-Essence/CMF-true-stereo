@@ -51,8 +51,8 @@ nothing.
 | Vendor | `UP1A.231005.007` (Android 14 vendor, where the audio HAL is) |
 
 Other regions (Global, India) are untested: the module checks the audio files by hash and
-only patches the exact ones it was built for, so on a build whose files differ it stays in
-Mono and changes nothing. Stereo works and is in
+only patches the exact ones it was built for, so on a build whose files differ it refuses
+Stereo and stays in Mono. Stereo works and is in
 daily use on the test phone, with the module's own protection running in the audio HAL (deep
 bass guard, earpiece limiter, optional speaker boost and earpiece leveller). Mono and Stereo switch without a reboot,
 and Magisk offers new releases as updates. Left and right follow the phone's orientation for
