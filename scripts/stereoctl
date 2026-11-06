@@ -339,7 +339,7 @@ cmd_off() {
     amp_set_chsel mono
     echo "note: the stereo overlay is still mounted. With the daemon off the"
     echo "      amp returns to its left slot on the next stream - run"
-    echo "      'stereoctl channels mono' and reboot for stock audio."
+    echo "      'stereoctl channels mono' for stock audio (it switches at once)."
   fi
   update_description
   echo "disarmed and reverted - controls are yours until 'stereoctl on'"

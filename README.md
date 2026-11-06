@@ -94,6 +94,9 @@ music alike. The full history of findings, tests and fixes is in [CHANGELOG.md](
 - How the speaker holds up to long, loud stereo listening.
 
 **Pending**
+- Next release (not yet published): `stereoctl off` in stereo no longer says to reboot after
+  `stereoctl channels mono` (mono has switched live since v0.9.4). Message only; it ships with
+  the next module change.
 - After the next Nothing OS update: check the vendor file hashes and add the new build.
 - Known limit: an app with its own audio effect (VLC) and an ordinary app playing on the same
   output at once, earpiece on the right: one of them is reversed (the HAL sees only the mix).
