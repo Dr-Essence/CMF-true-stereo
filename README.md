@@ -85,8 +85,6 @@ music alike. The full history of findings, tests and fixes is in [CHANGELOG.md](
 
 **Pending**
 - After the next Nothing OS update: check the vendor file hashes and add the new build.
-- Earpiece leveller (optional, not built): raises the earpiece's quiet and medium passages,
-  peaks never above today's, no frequency changed.
 - Known limit: an app with its own audio effect (VLC) and an ordinary app playing on the same
   output at once, earpiece on the right: one of them is reversed (the HAL sees only the mix).
 - Compressed offload: Android refuses it on this phone (Dirac is on for the output mix), so
