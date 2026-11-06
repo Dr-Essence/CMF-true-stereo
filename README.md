@@ -42,7 +42,7 @@ nothing.
 
 ## Status
 
-**Current release: v1.0.6.** Tested on one CMF Phone 1 (A015), EEA:
+**Current release: v1.0.7.** Tested on one CMF Phone 1 (A015), EEA:
 
 | | |
 |---|---|
@@ -77,7 +77,7 @@ music alike. The full history of findings, tests and fixes is in [CHANGELOG.md](
 - Earpiece at the receiver amp's top step (+8 dB); hi-res playback still works in stereo.
 
 **Not tested on a phone yet**
-- **v1.0.6** telling the apps: after a change made outside CMF Stereo (`stereoctl`,
+- v1.0.6 telling the apps: after a change made outside CMF Stereo (`stereoctl`,
   Magisk's Action button, the daemon's switch back to mono, and once when the daemon starts)
   the module asks each installed app to read the state again (`content call ...
   --method stateChanged`), so Nothing Settings' Stereo speakers page and Sound row follow at
@@ -94,9 +94,6 @@ music alike. The full history of findings, tests and fixes is in [CHANGELOG.md](
 - How the speaker holds up to long, loud stereo listening.
 
 **Pending**
-- Next release (not yet published): `stereoctl off` in stereo no longer says to reboot after
-  `stereoctl channels mono` (mono has switched live since v0.9.4). Message only; it ships with
-  the next module change.
 - After the next Nothing OS update: check the vendor file hashes and add the new build.
 - Known limit: an app with its own audio effect (VLC) and an ordinary app playing on the same
   output at once, earpiece on the right: one of them is reversed (the HAL sees only the mix).
@@ -105,6 +102,8 @@ music alike. The full history of findings, tests and fixes is in [CHANGELOG.md](
 - A short clip of the two drivers splitting a game's or film's audio, for this page.
 
 **Fixed recently**
+- v1.0.7: `stereoctl off` in stereo said to reboot after `stereoctl channels mono`; mono has
+  switched live since v0.9.4. Message only.
 - v1.0.4: in stereo the speaker got up to about 10 dB more deep bass than Awinic lets through
   in mono, and the earpiece clipped in its top 1.5 dB (CMF L/R Test DRIVER STUDY). The bass
   guard and the earpiece limiter hold both; a crash-loop guard puts the stock files back if
