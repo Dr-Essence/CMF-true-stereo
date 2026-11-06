@@ -15,7 +15,7 @@ speaker, the bottom speaker the right — no custom kernel, just root.
 |---|---|
 | 🔊 **Stereo** | Earpiece = left, speaker = right. Games, films and music finally have sides. |
 | 📢 **Mono** | Default. Both speakers play the full mix: louder and fuller than the bottom speaker alone. |
-| 📱 **App** | *CMF Stereo*, a clean Nothing-style app: on/off, Mono/Stereo, two 1–10 levels. |
+| 📱 **App** | *CMF Stereo*, a clean Nothing-style app: on/off, Mono/Stereo, two 1–10 levels and the protection settings, a Quick Settings tile, and (with LSPosed) a Stereo speakers page inside Nothing's Settings. |
 | 🛟 **Safe** | Patches nothing it has not verified, never touches the vendor partition, and undoes itself after two failed boots. |
 
 ### Install in three steps
@@ -131,7 +131,8 @@ It has two channel modes:
 - **stereo**: real left/right. The **earpiece plays the left channel and the
   speaker the right**. It costs Awinic's speaker-protection processing on
   media; the module's own protection (a fixed amp attenuation, a deep bass
-  guard and an earpiece limiter, measured against what Awinic does) stands in. See
+  guard and an earpiece limiter, measured against what Awinic does, with an
+  optional speaker boost and earpiece leveller) stands in. See
   [Mono and stereo](#mono-and-stereo).
 
 Getting stereo took finding the two places the phone folds the speaker to
@@ -316,7 +317,8 @@ stereoctl channels stereo     # switch to stereo now
 stereoctl channels mono       # back to stock now
 ```
 
-The CMF Stereo Manager app has the same switch, and so does the **Action** button on the
+The apps (CMF Stereo and CMF Stereo Pro), their Quick Settings tile and their Stereo speakers
+page in Nothing's Settings have the same switch, and so does the **Action** button on the
 module's card in Magisk (28 or newer), KernelSU and APatch: each press switches to the
 other mode and shows `stereoctl channels`' output.
 
@@ -379,7 +381,8 @@ the new build has been checked.
   speaker's peaks held 6 dB below the amp's full output at speaker level 10 (2 dB more per
   level down), and its deepest bass held back when it gets loud (the deep bass guard). Both
   were measured against Awinic's, but they are fixed limits: there is **no temperature
-  model**. Speaker boost makes it louder without raising those peaks. For long, loud
+  model**. Speaker boost makes it louder: a limiter then holds its peaks at Awinic's own
+  level, about 5 dB below full output (see the table above). For long, loud
   listening use **mono**; in stereo, lower the speaker level and back off at the first
   distortion.
 - **The earpiece.** In stereo the earpiece limiter (on by default) holds it at -2.5 dBFS,
@@ -536,8 +539,11 @@ it at 63311 of 65535 (−0.3 dB), and `ADDA_DL` is shared with the headphone
 path.
 
 The earpiece is a receiver: it will not match the speaker, and it has no
-protection circuit. In stereo, balance the two by turning the **speaker** down
-(`STEREO_ATTEN_DB`), not by pushing the earpiece.
+protection circuit of its own. In stereo the module's earpiece limiter (on by
+default) keeps it below where it crackles. Balance the two by turning the
+**speaker** down (the apps' speaker level, `STEREO_ATTEN_DB`), not by pushing the
+earpiece; the earpiece leveller brings up its quiet parts without raising its
+peaks.
 
 ## Why it ships empty elsewhere
 
@@ -556,9 +562,16 @@ off — that damage does not come back.
 ## Safety and recovery
 
 **Boot watchdog.** If two consecutive boots fail to reach `sys.boot_completed`
-while the policy overlay is active, `post-fs-data.sh` deletes the overlay
-before it can be mounted again. A bad policy costs one extra reboot instead of
-a trip to recovery.
+while the stereo overlay or the policy overlay is active, `post-fs-data.sh`
+removes that overlay before it can be mounted again: stereo goes back to stock
+mono (`CHANNELS=mono`). A bad boot costs one extra reboot instead of a trip to
+recovery.
+
+**Crash-loop guard.** If the audio HAL restarts 3 times within a minute in
+stereo, the daemon puts the stock files back (mono) at once and tells the apps.
+
+Both are covered by the off-device tests on fake files; neither has been needed
+on the phone yet.
 
 **XML validation.** No patched policy is installed unless it passes a
 structural check — balanced `<module>`, `<mixPort>`, `<devicePort>` and
@@ -742,7 +755,7 @@ function changes the level, so the library's ceilings are exact.
 ### Checks
 
 ```sh
-sh tests/run-tests.sh      # 194 checks; run under sh, dash, mksh and busybox sh
+sh tests/run-tests.sh      # 198 checks; run under sh, dash, mksh and busybox sh
 sh hal-swap/run.sh         # the HAL patch in qemu-aarch64 (needs clang, ld.lld, qemu)
 sh protect/build.sh        # the library rebuilds byte for byte (needs the NDK)
 ./build.sh                 # the flashable zip
