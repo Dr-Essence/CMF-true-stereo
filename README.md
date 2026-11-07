@@ -94,12 +94,16 @@ music alike. The full history of findings, tests and fixes is in [CHANGELOG.md](
 - How the speaker holds up to long, loud stereo listening.
 
 **Pending**
-- After the next Nothing OS update: check the vendor file hashes and add the new build.
-- Known limit: an app with its own audio effect (VLC) and an ordinary app playing on the same
-  output at once, earpiece on the right: one of them is reversed (the HAL sees only the mix).
-- Compressed offload: Android refuses it on this phone (Dirac is on for the output mix), so
-  apps never use it here; not worth testing further.
+- After a Nothing OS update (the CMF Phone 1 is expected to get security updates only, which
+  can still replace the audio files): check the vendor file hashes and add the new build.
+  Until then the module refuses Stereo on it and stays in Mono.
 - A short clip of the two drivers splitting a game's or film's audio, for this page.
+
+**Known limits** (see also *Risks, plainly*)
+- An app with its own audio effect (VLC) and an ordinary app playing on the same output at
+  once, earpiece on the right: one of them is reversed (the HAL sees only the mix).
+- Compressed offload: Android refuses it on this phone (Dirac is on for the output mix), so
+  apps never use it here (seen with the CMF L/R Test).
 
 **Fixed recently**
 - v1.0.7: `stereoctl off` in stereo said to reboot after `stereoctl channels mono`; mono has
