@@ -522,7 +522,7 @@ stop_daemons() {
 ##############################################################################
 
 MODPROP=${MODPROP:-$MODDIR/module.prop}
-DESC_ABOUT='Real left/right stereo on the CMF Phone 1 (A015): earpiece left, bottom speaker right, swapped when the phone is turned. Mono (stock, with Awinic speaker protection) or Stereo, switched at once from the app, stereoctl or the Action button. Patches only this phone'"'"'s verified vendor files; back to mono after two failed boots.'
+DESC_ABOUT='Real left/right stereo on the CMF Phone 1 (A015) from the earpiece and the bottom speaker, following the screen when the phone is turned. Mono (stock, with Awinic speaker protection) or Stereo, switched at once from the app, stereoctl or the Action button. Patches only this phone'"'"'s verified vendor files; back to mono after two failed boots.'
 
 describe_state() {
   case $(build_state) in
@@ -533,7 +533,7 @@ describe_state() {
     echo "[Off] Earpiece not used. Turn on in the app or with stereoctl on."
     return
   fi
-  if stereo_active; then _d="[Stereo] Earpiece left, speaker right."
+  if stereo_active; then _d="[Stereo] Left and right follow the screen."
   else _d="[Mono] Both speakers play the full mix."; fi
   _stg=mono; stereo_staged && _stg=stereo
   _act=mono; stereo_active && _act=stereo

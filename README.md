@@ -1,9 +1,10 @@
-<p align="center"><img src="https://raw.githubusercontent.com/Dr-Essence/CMF-true-stereo/main/docs/banner.png" alt="CMF true stereo - earpiece left, speaker right" width="100%"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/Dr-Essence/CMF-true-stereo/main/docs/banner.png" alt="CMF true stereo - left and right follow the screen" width="100%"></p>
 
 # CMF-true-stereo
 
-**Real left/right stereo on the CMF Phone 1.** The earpiece becomes the left
-speaker, the bottom speaker the right — no custom kernel, just root.
+**Real left/right stereo on the CMF Phone 1.** The earpiece and the bottom speaker
+become a stereo pair, and left and right follow the screen however you turn the phone —
+no custom kernel, just root.
 
 <p align="center">
   <a href="https://github.com/Dr-Essence/CMF-true-stereo/releases/latest"><b>Download the module</b></a> ·
@@ -13,7 +14,7 @@ speaker, the bottom speaker the right — no custom kernel, just root.
 
 |  | |
 |---|---|
-| 🔊 **Stereo** | Earpiece = left, speaker = right. Games, films and music finally have sides. |
+| 🔊 **Stereo** | The earpiece and the speaker play left and right, following how you hold the phone. Games, films and music finally have sides. |
 | 📢 **Mono** | Default. Both speakers play the full mix: louder and fuller than the bottom speaker alone. |
 | 📱 **App** | *CMF Stereo*, a clean Nothing-style app: on/off, Mono/Stereo, two 1–10 levels and the protection settings, a Quick Settings tile, and (with LSPosed) a Stereo speakers page inside Nothing's Settings. |
 | 🛟 **Safe** | Patches nothing it has not verified, never touches the vendor partition, and undoes itself after two failed boots. |
@@ -42,7 +43,7 @@ nothing.
 
 ## Status
 
-**Current release: v1.0.7.** Tested on one CMF Phone 1 (A015), EEA:
+**Current release: v1.0.8.** Tested on one CMF Phone 1 (A015), EEA:
 
 | | |
 |---|---|
@@ -106,6 +107,9 @@ music alike. The full history of findings, tests and fixes is in [CHANGELOG.md](
   apps never use it here (seen with the CMF L/R Test).
 
 **Fixed recently**
+- v1.0.8: the module's description, Magisk card, `stereoctl` and the installer said "earpiece
+  left, speaker right"; left and right follow the screen since v0.9.5, and the texts now say
+  so (the README and its banner too). Texts only.
 - v1.0.7: `stereoctl off` in stereo said to reboot after `stereoctl channels mono`; mono has
   switched live since v0.9.4. Message only.
 - v1.0.4: in stereo the speaker got up to about 10 dB more deep bass than Awinic lets through
@@ -131,8 +135,9 @@ It has two channel modes:
 - **mono** (default, stock audio): both drivers play the same full mix —
   louder, fuller and taller than the single bottom-firing speaker. This was
   the whole module once, back when it was called cmf-fake-stereo.
-- **stereo**: real left/right. The **earpiece plays the left channel and the
-  speaker the right**. It costs Awinic's speaker-protection processing on
+- **stereo**: real left/right. The **earpiece and the speaker play left and
+  right, following the screen** (in portrait and with the earpiece on your left,
+  the earpiece is left; turned the other way, it is right). It costs Awinic's speaker-protection processing on
   media; the module's own protection (a fixed amp attenuation, a deep bass
   guard and an earpiece limiter, measured against what Awinic does, with an
   optional speaker boost and earpiece leveller) stands in. See
@@ -146,7 +151,8 @@ Verified on **A015 / Tetris, MT6878, Nothing OS 4.1 (Tetris-B4.1-260615-1652-EEA
 
 ## What it does
 
-- **Real stereo** in stereo mode: earpiece = left channel, bottom speaker = right
+- **Real stereo** in stereo mode: the earpiece and the bottom speaker play left and right,
+  following the screen
 - **Mono** mode: both speakers play the full mix, with full speaker protection
 - Plays media through the earpiece alongside the speaker, automatically
 - Earpiece at the receiver amp's maximum, +8 dB (`Handset Volume 0`), the same value the HAL uses

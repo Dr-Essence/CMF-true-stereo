@@ -129,7 +129,7 @@ if grep -q "^CHANNELS=stereo" "$DATADIR/stereo.conf" 2>/dev/null; then
         log() { :; }
         . "$MODDIR/scripts/channels.sh"
         stage_stereo'); then
-    ui_print "  channels : stereo (earpiece left, speaker right)"
+    ui_print "  channels : stereo (left and right follow the screen)"
   else
     sed -i 's/^CHANNELS=.*/CHANNELS=mono/' "$DATADIR/stereo.conf"
     ui_print "  channels : mono - stereo could not be staged:"

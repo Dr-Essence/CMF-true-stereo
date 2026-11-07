@@ -37,7 +37,8 @@ stereoctl - CMF Phone 1 stereo speaker control
                       by restarting the audio HAL; else after a reboot)
                       mono   = stock: both drivers play the full mix, with
                                Awinic speaker protection
-                      stereo = earpiece left, speaker right. Awinic's DSP
+                      stereo = left and right on the earpiece and the
+                               speaker, following the screen. Awinic's DSP
                                protection is replaced by a fixed amp
                                attenuation (STEREO_ATTEN_DB, default 6 dB)
                                and the module's own protection (below)
@@ -367,7 +368,7 @@ cmd_channels() {
           echo "stereo staged. Reboot to apply ($_w)."
         fi
         echo
-        echo "  earpiece = left channel, speaker = right channel."
+        echo "  left and right play on the earpiece and the speaker, following the screen."
         echo "  Awinic's speaker protection is off for media in this mode; the"
         echo "  amp is held ${STEREO_ATTEN_DB:-6} dB down instead (STEREO_ATTEN_DB), and the"
         echo "  module's own protection holds the deep bass and the earpiece"
