@@ -43,7 +43,7 @@ nothing.
 
 ## Status
 
-**Current release: v1.0.8.** Tested on one CMF Phone 1 (A015), EEA:
+**Current release: v1.0.9-beta** (versions are marked beta from now on: the module is still in testing). Tested on one CMF Phone 1 (A015), EEA:
 
 | | |
 |---|---|
@@ -130,6 +130,8 @@ The newest release is the stable one; earlier ones are kept as pre-releases for 
 Each release's own page has its notes, and [CHANGELOG.md](CHANGELOG.md) has the full
 history of findings, tests and fixes.
 
+**v1.0.9-beta** (8 Nov 2026): versions are marked beta from now on; the module is unchanged
+since v1.0.8 (internal version 1090, so Magisk offers it as an update).
 **v1.0.8** (7 Nov 2026): every text (Magisk card, `stereoctl`, installer) says left and right
 follow how you hold the phone.
 **v1.0.7** (6 Nov): `stereoctl off` no longer asks for a reboot in Mono; the README names the
