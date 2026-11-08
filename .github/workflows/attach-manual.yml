@@ -1,0 +1,27 @@
+name: Attach manual
+
+# Uploads the PDF manual in docs/manual to a release (the latest one unless a tag is given),
+# replacing the copy already there. Run by hand after the manual changes.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (empty = the latest release)
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Upload the manual
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          tag="${TAG:-$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)}"
+          echo "release: $tag"
+          gh release upload "$tag" docs/manual/*.pdf --clobber

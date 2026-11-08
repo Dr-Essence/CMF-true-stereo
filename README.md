@@ -60,6 +60,10 @@ and Magisk offers new releases as updates. Left and right follow the phone's ori
 every way apps play sound on this phone. "While playing" engages the earpiece for games and
 music alike. The full history of findings, tests and fixes is in [CHANGELOG.md](CHANGELOG.md).
 
+**Instruction manual (early beta):** `CMF-True-Stereo-Manual.pdf`, attached to the latest
+release, covers every command, setting, safety net and fix in one place (source in
+[docs/manual](docs/manual)). It is still being written and checked.
+
 **Verified on the phone**
 - v1.0.5 earpiece leveller: a clear difference on the earpiece side, with no distortion heard.
 - Stereo: a left-only file plays on the earpiece only, the speaker's right slot silent, with
