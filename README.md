@@ -1,4 +1,4 @@
-<p align="center"><img src="https://raw.githubusercontent.com/Dr-Essence/CMF-true-stereo/main/docs/banner.png?v=8" alt="CMF true stereo, real left and right stereo on the CMF Phone 1" width="100%"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/Dr-Essence/CMF-true-stereo/main/docs/banner.png?v=9" alt="CMF true stereo, real left and right stereo on the CMF Phone 1" width="100%"></p>
 
 # CMF-true-stereo
 
