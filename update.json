@@ -1,6 +1,6 @@
 {
-  "version": "v1.0.8",
-  "versionCode": 1080,
-  "zipUrl": "https://github.com/Dr-Essence/CMF-true-stereo/releases/download/v1.0.8/CMF-true-stereo-v1.0.8.zip",
-  "changelog": "https://raw.githubusercontent.com/Dr-Essence/CMF-true-stereo/main/docs/releases/v1.0.8.md"
+  "version": "v1.0.9-beta",
+  "versionCode": 1090,
+  "zipUrl": "https://github.com/Dr-Essence/CMF-true-stereo/releases/download/v1.0.9-beta/CMF-true-stereo-v1.0.9-beta.zip",
+  "changelog": "https://raw.githubusercontent.com/Dr-Essence/CMF-true-stereo/main/docs/releases/v1.0.9-beta.md"
 }
