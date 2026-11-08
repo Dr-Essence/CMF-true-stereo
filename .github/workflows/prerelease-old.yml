@@ -1,0 +1,27 @@
+name: Mark older releases as pre-releases
+
+# Keeps one stable release: every published release except the newest becomes a
+# pre-release. Nothing is deleted; links to releases/latest still reach the newest.
+on: workflow_dispatch
+
+permissions:
+  contents: write
+
+jobs:
+  mark:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark every release but the newest as a pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          latest=$(gh api "repos/$REPO/releases/latest" --jq .id)
+          echo "Newest release kept as is: $latest"
+          gh api --paginate "repos/$REPO/releases" \
+            --jq '.[] | select(.prerelease == false and .draft == false) | .id' |
+          while read -r id; do
+            [ "$id" = "$latest" ] && continue
+            gh api -X PATCH "repos/$REPO/releases/$id" -F prerelease=true \
+              --jq '.tag_name + " is now a pre-release"'
+          done

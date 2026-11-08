@@ -124,6 +124,40 @@ music alike. The full history of findings, tests and fixes is in [CHANGELOG.md](
 
 ---
 
+## Changelog
+
+The newest release is the stable one; earlier ones are kept as pre-releases for reference.
+Each release's own page has its notes, and [CHANGELOG.md](CHANGELOG.md) has the full
+history of findings, tests and fixes.
+
+**v1.0.8** (7 Nov 2026): every text (Magisk card, `stereoctl`, installer) says left and right
+follow how you hold the phone.
+**v1.0.7** (6 Nov): `stereoctl off` no longer asks for a reboot in Mono; the README names the
+exact tested Nothing OS build.
+**v1.0.6** (5 Nov): Nothing Settings and the Quick Settings tile follow every change at once,
+including `stereoctl`, Magisk's Action button and the safety net.
+**v1.0.5** (5 Nov): optional earpiece leveller, which brings up the earpiece's quiet parts so
+it keeps up with the speaker.
+**v1.0.4** (5 Nov): the module's own stereo protection, built from measurements: deep bass
+guard, earpiece limiter, speaker boost; back to Mono by itself if the audio service keeps
+restarting.
+**v1.0.3** (5 Nov): both speakers in games and every other app, not only music players.
+**v1.0.2** (5 Nov): apps with their own audio effect (VLC) follow the screen too.
+**v1.0.1** (5 Nov): left and right right again (v1.0.0 played them reversed).
+**v1.0.0** (5 Nov): one swap for every app; played reversed, replaced by v1.0.1.
+**v0.9.9** (5 Nov): fixed Stereo from Magisk's Action button crashing the audio service, and
+reversed channels in some apps when turned.
+**v0.9.8** (5 Nov): Action button in Magisk, live status on the module's card, stock sound
+after a Nothing OS update until the new build is supported.
+**v0.9.7** (5 Nov): listed as by Dr.Essence; the first release Magisk offers as an update.
+**v0.9.6** (4 Nov): updates through Magisk, KernelSU and APatch; SHA-256 checksums.
+**v0.9.5** (4 Nov): left and right follow which way the phone is turned.
+**v0.9.4** (4 Nov): Mono and Stereo switch without a reboot; quieter kernel log.
+**v0.9.3** (4 Nov): instant on/off; lighter in the background.
+**v0.9.2** (3 Nov): first true stereo, the earpiece and the speaker as a left/right pair.
+**v0.8.2, v0.7.1** (Sep 2026): the earlier version: the earpiece played along with the speaker
+(the same mono mix on both).
+
 ## About
 
 A Magisk / KernelSU / APatch module that makes the **CMF Phone 1** play media
