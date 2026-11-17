@@ -12,3 +12,15 @@
   build before it.
 - **Never risk the hardware or the boot.** Speaker and earpiece safety come before loudness;
   anything mounted at boot needs a watchdog and a way back.
+
+# Next release (agreed 2026-11-17)
+
+CMF Stereo is paused apart from bug fixes. The next release carries:
+1. **The call bug fix**, once a phone test confirms the cause: while a call is active the
+   daemon neither applies nor restores the earpiece controls. Tests before it counts as fixed:
+   music playing, then a call answered on the earpiece, with the daemon on (must work) and the
+   log showing no restore during the call.
+2. **A separate download counter for Magisk updates:** the same zip attached twice,
+   `CMF-true-stereo-<ver>.zip` (manual downloads) and `CMF-true-stereo-<ver>-update.zip`
+   (linked only from update.json's zipUrl), both in SHA256SUMS.txt. No tracking in the module:
+   only GitHub's per-file download counts.

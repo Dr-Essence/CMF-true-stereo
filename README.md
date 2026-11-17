@@ -103,6 +103,11 @@ release, covers every command, setting, safety net and fix in one place (source 
   can still replace the audio files): check the vendor file hashes and add the new build.
   Until then the module refuses Stereo on it and stays in Mono.
 - A short clip of the two drivers splitting a game's or film's audio, for this page.
+- **Reported: the earpiece is sometimes silent during a call** (the call then works only on
+  speaker). Under investigation, not yet reproduced on purpose: the daemon restores the
+  earpiece controls (`Handset Volume` 31 = mute, `RCV Mux` Open) when playback stops and has
+  no check for an active call, so a restore during a call would cut the earpiece. Workaround
+  until it is fixed: `stereoctl off` before a call, or use the speaker.
 
 **Known limits** (see also *Risks, plainly*)
 - An app with its own audio effect (VLC) and an ordinary app playing on the same output at
