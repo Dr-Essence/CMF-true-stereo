@@ -46,7 +46,7 @@ jobs:
           Read the README's *Mono and stereo* section first: stereo turns Awinic's
           speaker protection off for media and holds a fixed amp attenuation instead.
 
-          Companion app: [CMF-true-stereo-manager](https://github.com/Dr-Essence/CMF-true-stereo-manager/releases)
+          Companion app: [CMF-true-stereo-manager](https://github.com/Dr-Essence/CMF-true-stereo-manager/releases/latest)
           BODY
           fi
           echo "NOTES=$NOTES" >> "$GITHUB_ENV"
@@ -68,6 +68,9 @@ jobs:
             | sed 's#  .*/#  #' > SHA256SUMS.txt
           cat SHA256SUMS.txt
           cp "$NOTES" release-body-final.md
+          # Every release links the companion app, even if its notes file forgot it.
+          grep -q 'CMF-true-stereo-manager' release-body-final.md || \
+            { echo; echo 'Companion app: [CMF-true-stereo-manager](https://github.com/Dr-Essence/CMF-true-stereo-manager/releases/latest)'; } >> release-body-final.md
           { echo; echo '### Checksums (SHA-256)'; echo '```'; cat SHA256SUMS.txt; echo '```'; } >> release-body-final.md
           echo "NOTES=release-body-final.md" >> "$GITHUB_ENV"
 

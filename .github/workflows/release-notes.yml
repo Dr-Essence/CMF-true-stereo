@@ -26,6 +26,9 @@ jobs:
             if gh release view "$tag" >/dev/null 2>&1; then
               # Keep the checksums the release workflow published.
               cp "$f" "$RUNNER_TEMP/notes.md"
+              # Every release links the companion app, even if its notes file forgot it.
+              grep -q 'CMF-true-stereo-manager' "$RUNNER_TEMP/notes.md" || \
+                { echo; echo 'Companion app: [CMF-true-stereo-manager](https://github.com/Dr-Essence/CMF-true-stereo-manager/releases/latest)'; } >> "$RUNNER_TEMP/notes.md"
               if curl -fsSL -o "$RUNNER_TEMP/sums.txt" "https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/SHA256SUMS.txt"; then
                 { echo; echo '### Checksums (SHA-256)'; echo '```'; cat "$RUNNER_TEMP/sums.txt"; echo '```'; } >> "$RUNNER_TEMP/notes.md"
               fi
